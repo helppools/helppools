@@ -31,9 +31,9 @@
 //   'http://good.localhost:5173', 
 
 //   // --- LIVE SERVER KE LIYE (Ye sabse zaroori hain) ---
-//   'https://cryptocommunity.live',        // 🔥 Live Main Website
-//   'https://www.cryptocommunity.live',    // 🔥 Live Main Website (www wali)
-//   'https://good.cryptocommunity.live'   // 🔥 Live Admin Panel (good.localhost ki jagah)
+//   'https://helpingpools.online',        // 🔥 Live Main Website
+//   'https://www.helpingpools.online',    // 🔥 Live Main Website (www wali)
+//   'https://good.helpingpools.online'   // 🔥 Live Admin Panel (good.localhost ki jagah)
 // ];
 // app.use(cors({
 //   origin: function (origin, callback) {
@@ -193,9 +193,9 @@ const allowedOrigins = [
   'http://good.localhost:5173', 
 
   // --- LIVE SERVER KE LIYE (Ye sabse zaroori hain) ---
-  'https://cryptocommunity.live',        // 🔥 Live Main Website
-  'https://www.cryptocommunity.live',    // 🔥 Live Main Website (www wali)
-  'https://good.cryptocommunity.live'   // 🔥 Live Admin Panel (good.localhost ki jagah)
+  'https://helpingpools.online',        // 🔥 Live Main Website
+  'https://www.helpingpools.online',    // 🔥 Live Main Website (www wali)
+  'https://good.helpingpools.online'   // 🔥 Live Admin Panel (good.localhost ki jagah)
 ];
 app.use(cors({
   origin: function (origin, callback) {

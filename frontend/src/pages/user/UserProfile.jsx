@@ -70,7 +70,7 @@
 //   };
 
 //   // 🔥 SMART EMAIL LOGIC (PC ke liye Gmail, Mobile ke liye Mail App)
-//   const supportEmail = "support@cryptocommunity.live";
+//   const supportEmail = "support@helpingpools.online";
 //   const mailSubject = encodeURIComponent(`Wallet Address Update Request - User ID: ${user?.userId}`);
 //   const mailBody = encodeURIComponent(`Hello Support Team,\n\nPlease update my USDT (BEP20) wallet address.\n\nUser ID: ${user?.userId}\nRegistered Email: ${user?.email}\nNew Wallet Address: [Please paste your BEP-20 address here]\n\nThank you.`);
 
@@ -427,7 +427,7 @@ function UserProfile() {
   };
 
   // Support email logic
-  const supportEmail = "support@cryptocommunity.live";
+  const supportEmail = "support@helpingpools.online";
 
   const mailSubject = encodeURIComponent(
     `Wallet Address Update Request - User ID: ${user?.userId}`
