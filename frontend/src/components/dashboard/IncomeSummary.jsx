@@ -164,7 +164,7 @@ const IncomeSummary = ({ income = {}, user = {} }) => {
 
   const cardData = [
     {
-      label: "Community Earning",
+      label: "Helping Pool Earning",
       value: globalGrowthIncome,
       icon: TrendingUp
     },
@@ -179,7 +179,7 @@ const IncomeSummary = ({ income = {}, user = {} }) => {
       icon: Layers
     },
     {
-      label: "Team Reward",
+      label: "Royalty Offer",
       value: rewardIncome,
       icon: Trophy
     },

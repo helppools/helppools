@@ -1289,7 +1289,7 @@ const CreditToWalletModal = ({ userId, onClose, onSuccess }) => {
 
                   {balances.reward > 0 && (
                     <MainIncomeBox
-                      title="Team Reward"
+                      title="Royalty Earning"
                       icon={Trophy}
                       iconColor="text-amber-600"
                       source="reward"

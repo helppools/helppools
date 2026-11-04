@@ -1432,7 +1432,7 @@ const WithdrawalModal = ({ userId, onClose }) => {
         "reward",
         withdrawals.reward,
         balances.reward,
-        "Team Reward"
+        "Royalty Earning"
       );
 
       if (totalRequested === 0) {
