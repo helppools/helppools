@@ -1836,7 +1836,7 @@ router.put(
             amount,
             fromUserId: currentUser.userId,
             toUserId: targetUser.userId,
-            description: `Node Activated with $${amount}`,
+            description: ` Activated with $${amount}`,
             status: 'success'
           });
 
@@ -1845,7 +1845,7 @@ router.put(
              { $set: { isToppedUp: true, topUpAmount: Math.max(targetUser.topUpAmount || 0, amount), updatedAt: new Date() } }
           );
 
-          return res.json({ success: true, message: `Top-up successful! $${amount} Node Activated.` });
+          return res.json({ success: true, message: `Top-up successful! $${amount}  Activated.` });
       }
 
       // =======================================================
@@ -1863,7 +1863,7 @@ router.put(
       }
       await targetUser.save();
 
-      let txDescription = isFirstTopup ? `Node Activated with $${amount}` : `Node Upgrade with $${amount}`;
+      let txDescription = isFirstTopup ? ` Activated with $${amount}` : ` Upgrade with $${amount}`;
       await createTransaction({
             userId: targetUser.userId,
             type: "topup",
@@ -1874,7 +1874,7 @@ router.put(
             status: 'success'
       });
 
-      res.json({ success: true, message: `Top-up successful! $${amount} Node Activated.` });
+      res.json({ success: true, message: `Top-up successful! $${amount}  Activated.` });
 
 
       // =======================================================
@@ -1903,7 +1903,7 @@ router.put(
                           await createTransaction({
                               userId: sponsor.userId, type: "direct_income", source: "direct",
                               amount: directBonusAmount, fromUserId: targetUser.userId,
-                              description: `Direct Bonus (10%) from ${targetUser.name}'s Node Activation`, status: 'success'
+                              description: `Direct Bonus (10%) from ${targetUser.name}'s  Activation`, status: 'success'
                           });
 
                           // 🔥 FAST TRACK
@@ -2185,7 +2185,7 @@ router.put(
       }
       await targetUser.save();
 
-      let txDescription = isFirstTopup ? `Node Activated with $${amount}` : `Node Upgrade with $${amount}`;
+      let txDescription = isFirstTopup ? ` Activated with $${amount}` : ` Upgrade with $${amount}`;
       await createTransaction({
         userId: targetUser.userId, type: "topup", amount, fromUserId: currentUser.userId, toUserId: targetUser.userId,
         description: txDescription, status: 'success'
@@ -2219,7 +2219,7 @@ router.put(
                           await createTransaction({
                               userId: sponsor.userId, type: "direct_income", source: "direct",
                               amount: directBonusAmount, fromUserId: targetUser.userId,
-                              description: `Direct Bonus (10%) from ${targetUser.name}'s Node Activation${isDummyTopup ? " (Leader)" : ""}`,
+                              description: `Direct Bonus (10%) from ${targetUser.name}'s  Activation${isDummyTopup ? " (Leader)" : ""}`,
                               status: 'success'
                           });
 

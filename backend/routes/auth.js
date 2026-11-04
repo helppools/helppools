@@ -188,12 +188,12 @@ const generateUserId = async () => {
 //     // try {
 //     //     await sendEmail({
 //     //         email: user.email,
-//     //         subject: '🎉 Welcome to Crypto Community!',
+//     //         subject: '🎉 Welcome to helping pools!',
 //     //         html: `
 //     //         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid #eaeaea;">
                 
 //     //             <div style="background-color: #2b4450; padding: 40px 20px; text-align: center; color: #ffffff;">
-//     //                 <h1 style="margin: 0; font-size: 28px; font-weight: bold;">🚀 Welcome to Crypto Community</h1>
+//     //                 <h1 style="margin: 0; font-size: 28px; font-weight: bold;">🚀 Welcome to helping pools</h1>
 //     //                 <p style="margin: 10px 0 0 0; font-size: 15px; color: #cccccc;">Your journey to financial growth starts here</p>
 //     //             </div>
                 
@@ -229,7 +229,7 @@ const generateUserId = async () => {
 //     //             </div>
                 
 //     //             <div style="background-color: #1a1a1a; padding: 20px; text-align: center; color: #888888; font-size: 13px;">
-//     //                 © 2026 Crypto Community. All rights reserved.<br>
+//     //                 © 2026 helping pools. All rights reserved.<br>
 //     //                 <span style="font-size: 11px;">This is an automated message, please do not reply to this email.</span>
 //     //             </div>
 //     //         </div>
@@ -378,11 +378,11 @@ const generateRandomPassword = (length = 8) => {
 //     try {
 //         await sendEmail({
 //             email: user.email,
-//             subject: '🎉 Welcome to Crypto Community!',
+//             subject: '🎉 Welcome to helping pools!',
 //             html: `
 //             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid #eaeaea;">
 //                 <div style="background-color: #2b4450; padding: 40px 20px; text-align: center; color: #ffffff;">
-//                     <h1 style="margin: 0; font-size: 28px; font-weight: bold;">🚀 Welcome to Crypto Community</h1>
+//                     <h1 style="margin: 0; font-size: 28px; font-weight: bold;">🚀 Welcome to helping pools</h1>
 //                     <p style="margin: 10px 0 0 0; font-size: 15px; color: #cccccc;">Your journey to financial growth starts here</p>
 //                 </div>
 //                 <div style="padding: 40px 30px; color: #333333;">
@@ -412,7 +412,7 @@ const generateRandomPassword = (length = 8) => {
 //                     </p>
 //                 </div>
 //                 <div style="background-color: #1a1a1a; padding: 20px; text-align: center; color: #888888; font-size: 13px;">
-//                     © 2026 Crypto Community. All rights reserved.<br>
+//                     © 2026 helping pools. All rights reserved.<br>
 //                     <span style="font-size: 11px;">This is an automated message, please do not reply to this email.</span>
 //                 </div>
 //             </div>

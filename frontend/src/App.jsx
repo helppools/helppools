@@ -16,6 +16,8 @@ import RequireAdminAuth from './components/RequireAdminAuth.jsx';
 // 🔹 Public Pages
 import Home from './pages/auth/Home.jsx';
 import Login from './pages/auth/Login.jsx';
+import About from "./pages/auth/About";
+
 import Register from './pages/auth/Register.jsx';
 import MaintenancePage from './pages/error/MaintenancePage.jsx';
 import ForgotPassword from './pages/auth/ForgotPassword.jsx';
@@ -208,6 +210,7 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/about" element={<About />} />
             <Route path="/register" element={<Register />} />
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />

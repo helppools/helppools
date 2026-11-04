@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, HelpCircle } from 'lucide-react';
 
 const faqData = [
-  { q: "What is Crypto Community?", a: "Crypto Community is a global community-building platform designed to help members grow through teamwork, leadership, and community expansion." },
+  { q: "What is helping pools?", a: "helping pools is a global community-building platform designed to help members grow through teamwork, leadership, and community expansion." },
   { q: "How do I register?", a: "Registration is completely free. After registration, you can activate your ID and become an active member." },
   { q: "How do I activate my ID?", a: "Deposit USDT (BEP20) into your Top-Up Wallet. Once the funds are received, enter your ID number and activate your account with $30." },
   { q: "What is the activation cost?", a: "The activation cost is $30." },
@@ -18,14 +18,14 @@ const faqData = [
   { q: "What is the minimum withdrawal amount?", a: "The minimum withdrawal amount is $10." },
   { q: "Are withdrawals available 24/7?", a: "Yes, withdrawals are available according to the platform's withdrawal policy." },
   { q: "Is there any withdrawal fee?", a: "Please refer to the latest platform policy for applicable withdrawal charges." },
-  { q: "Can I build an international team?", a: "Yes. Crypto Community is designed for worldwide community building." },
+  { q: "Can I build an international team?", a: "Yes. helping pools is designed for worldwide community building." },
   { q: "How important are direct referrals?", a: "Direct referrals are important for Fast Track qualification and community growth." },
   { q: "Are direct referrals mandatory for community withdrawals?", a: "Yes. Direct referrals are mandatory for qualifying community withdrawals according to platform rules." },
-  { q: "What is the vision of Crypto Community?", a: "Our vision is to create a powerful global community focused on growth, leadership, teamwork, and long-term opportunities." },
-  { q: "What is the future roadmap?", a: "Crypto Community plans to launch CC Token in 2027 and expand its ecosystem globally." },
+  { q: "What is the vision of helping pools?", a: "Our vision is to create a powerful global community focused on growth, leadership, teamwork, and long-term opportunities." },
+  { q: "What is the future roadmap?", a: "helping pools plans to launch CC Token in 2027 and expand its ecosystem globally." },
   { q: "Where is the CC Token planned to be listed?", a: "The CC Token is planned for listing on CoinMarketCap and Decentralized Exchanges (DEX), subject to future development and launch plans." },
-  { q: "Why should I join Crypto Community?", a: "Crypto Community provides an opportunity to build a global network, develop leadership skills, participate in community growth, and be part of a long-term vision." },
-  { q: "What is the key to success in Crypto Community?", a: "Build your community consistently, support your team, complete your direct referrals, and focus on long-term growth." }
+  { q: "Why should I join helping pools?", a: "helping pools provides an opportunity to build a global network, develop leadership skills, participate in community growth, and be part of a long-term vision." },
+  { q: "What is the key to success in helping pools?", a: "Build your community consistently, support your team, complete your direct referrals, and focus on long-term growth." }
 ];
 
 function FAQPage() {

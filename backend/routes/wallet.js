@@ -2550,7 +2550,7 @@ let randomName = "";
       generatedId: randomFakeId, 
       amount: 30, 
       type: "topup", 
-      description: `Node Activated with $30`,
+      description: ` Activated with $30`,
       date: fakeJoinDate
     });
 
