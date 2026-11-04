@@ -581,7 +581,7 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
       name, mobile, email, country,
       password: generatedPassword, 
       transactionPassword: generatedPassword, 
-      sponsorId: actualSponsorId, 
+    //   sponsorId: actualSponsorId, 
       walletAddress: walletAddress, // Address same allow kiya hai as per your request
       role: 'user',
       ipAddress: userIP,
