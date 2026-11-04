@@ -528,37 +528,37 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
     // ==========================================
 
 
-    if (!sponsorId) return res.status(400).json({ message: 'Sponsor ID is compulsory.' });
+    // if (!sponsorId) return res.status(400).json({ message: 'Sponsor ID is compulsory.' });
 
     // 🔥 5. SPONSOR CHECK LOGIC
-    let actualSponsorId = parseInt(sponsorId);
-    let sponsorExists = await User.findOne({ userId: actualSponsorId });
-    let isFakeSponsor = false;
+    // let actualSponsorId = parseInt(sponsorId);
+    // let sponsorExists = await User.findOne({ userId: actualSponsorId });
+    // let isFakeSponsor = false;
 
-    if (!sponsorExists) {
-         sponsorExists = await FakeUser.findOne({ userId: actualSponsorId });
-        if (sponsorExists) {
-            isFakeSponsor = true; 
-        }
-    }
+    // if (!sponsorExists) {
+    //      sponsorExists = await FakeUser.findOne({ userId: actualSponsorId });
+    //     if (sponsorExists) {
+    //         isFakeSponsor = true; 
+    //     }
+    // }
 
-    if (!sponsorExists) return res.status(400).json({ message: 'Invalid Sponsor ID.' });
+    // if (!sponsorExists) return res.status(400).json({ message: 'Invalid Sponsor ID.' });
 
-    if (!isFakeSponsor && sponsorExists.isSponsorDeactivated) {
-        return res.status(403).json({ message: 'Policy violation: The provided sponsor link is invalid or deactivated.' });    
-    }
+    // if (!isFakeSponsor && sponsorExists.isSponsorDeactivated) {
+    //     return res.status(403).json({ message: 'Policy violation: The provided sponsor link is invalid or deactivated.' });    
+    // }
 
-    // ✨ Fake Sponsor Logic
-    if (isFakeSponsor) {
-        const SYSTEM_TOP_ID = 5204198; 
-        const topUser = await User.findOne({ userId: SYSTEM_TOP_ID }); 
-        if (topUser) {
-            actualSponsorId = topUser.userId; 
-            console.log(`[SYSTEM ATTACH] Fake Sponsor (${sponsorId}) used. Redirecting to Top Earning ID: ${topUser.userId}`);
-        } else {
-            console.log(`⚠️ WARNING: Top ID ${SYSTEM_TOP_ID} not found in database!`);
-        }
-    }
+    // // ✨ Fake Sponsor Logic
+    // if (isFakeSponsor) {
+    //     const SYSTEM_TOP_ID = 5204198; 
+    //     const topUser = await User.findOne({ userId: SYSTEM_TOP_ID }); 
+    //     if (topUser) {
+    //         actualSponsorId = topUser.userId; 
+    //         console.log(`[SYSTEM ATTACH] Fake Sponsor (${sponsorId}) used. Redirecting to Top Earning ID: ${topUser.userId}`);
+    //     } else {
+    //         console.log(`⚠️ WARNING: Top ID ${SYSTEM_TOP_ID} not found in database!`);
+    //     }
+    // }
 
     // ✨ Unique ID Generator
     let newUserId;
