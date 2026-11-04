@@ -2897,9 +2897,9 @@ router.get('/sponsor-name/:id', async (req, res) => {
     }
 
     // 3. Agar dono jagah nahi mila toh 404
-    // if (!sponsor) {
-    //   return res.status(404).json({ message: 'Sponsor not found' });
-    // }
+    if (!sponsor) {
+      return res.status(404).json({ message: 'Sponsor not found' });
+    }
 
     // 4. Sirf naam bhej do (Frontend isi ka intezaar kar raha hai)
     res.json({ name: sponsor.name });

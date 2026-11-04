@@ -220,7 +220,7 @@ const generateUserId = async () => {
 //     //                 </div>
                     
 //     //                 <div style="text-align: center; margin-bottom: 40px;">
-//     //                     <a href="https://helpingpools.online/login" style="display: inline-block; background-color: #1e88e5; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(30,136,229,0.3);">🔐 Login to Dashboard</a>
+//     //                     <a href="https://cryptocommunity.live/login" style="display: inline-block; background-color: #1e88e5; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(30,136,229,0.3);">🔐 Login to Dashboard</a>
 //     //                 </div>
                     
 //     //                 <p style="font-size: 14px; color: #d32f2f; margin: 0; background-color: #ffebee; padding: 12px; border-radius: 6px;">
@@ -405,7 +405,7 @@ const generateRandomPassword = (length = 8) => {
 //                         </p>
 //                     </div>
 //                     <div style="text-align: center; margin-bottom: 40px;">
-//                         <a href="https://helpingpools.online/login" style="display: inline-block; background-color: #1e88e5; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(30,136,229,0.3);">🔐 Login to Dashboard</a>
+//                         <a href="https://cryptocommunity.live/login" style="display: inline-block; background-color: #1e88e5; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(30,136,229,0.3);">🔐 Login to Dashboard</a>
 //                     </div>
 //                     <p style="font-size: 14px; color: #d32f2f; margin: 0; background-color: #ffebee; padding: 12px; border-radius: 6px;">
 //                         ⚠️ <strong>Security Alert:</strong> Please do not share your login or transaction passwords with anyone for your account's safety.
@@ -528,37 +528,37 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
     // ==========================================
 
 
-    // if (!sponsorId) return res.status(400).json({ message: 'Sponsor ID is compulsory.' });
+    if (!sponsorId) return res.status(400).json({ message: 'Sponsor ID is compulsory.' });
 
     // 🔥 5. SPONSOR CHECK LOGIC
-    // let actualSponsorId = parseInt(sponsorId);
-    // let sponsorExists = await User.findOne({ userId: actualSponsorId });
-    // let isFakeSponsor = false;
+    let actualSponsorId = parseInt(sponsorId);
+    let sponsorExists = await User.findOne({ userId: actualSponsorId });
+    let isFakeSponsor = false;
 
-    // if (!sponsorExists) {
-    //      sponsorExists = await FakeUser.findOne({ userId: actualSponsorId });
-    //     if (sponsorExists) {
-    //         isFakeSponsor = true; 
-    //     }
-    // }
+    if (!sponsorExists) {
+         sponsorExists = await FakeUser.findOne({ userId: actualSponsorId });
+        if (sponsorExists) {
+            isFakeSponsor = true; 
+        }
+    }
 
-    // if (!sponsorExists) return res.status(400).json({ message: 'Invalid Sponsor ID.' });
+    if (!sponsorExists) return res.status(400).json({ message: 'Invalid Sponsor ID.' });
 
-    // if (!isFakeSponsor && sponsorExists.isSponsorDeactivated) {
-    //     return res.status(403).json({ message: 'Policy violation: The provided sponsor link is invalid or deactivated.' });    
-    // }
+    if (!isFakeSponsor && sponsorExists.isSponsorDeactivated) {
+        return res.status(403).json({ message: 'Policy violation: The provided sponsor link is invalid or deactivated.' });    
+    }
 
-    // // ✨ Fake Sponsor Logic
-    // if (isFakeSponsor) {
-    //     const SYSTEM_TOP_ID = 5204198; 
-    //     const topUser = await User.findOne({ userId: SYSTEM_TOP_ID }); 
-    //     if (topUser) {
-    //         actualSponsorId = topUser.userId; 
-    //         console.log(`[SYSTEM ATTACH] Fake Sponsor (${sponsorId}) used. Redirecting to Top Earning ID: ${topUser.userId}`);
-    //     } else {
-    //         console.log(`⚠️ WARNING: Top ID ${SYSTEM_TOP_ID} not found in database!`);
-    //     }
-    // }
+    // ✨ Fake Sponsor Logic
+    if (isFakeSponsor) {
+        const SYSTEM_TOP_ID = 5204198; 
+        const topUser = await User.findOne({ userId: SYSTEM_TOP_ID }); 
+        if (topUser) {
+            actualSponsorId = topUser.userId; 
+            console.log(`[SYSTEM ATTACH] Fake Sponsor (${sponsorId}) used. Redirecting to Top Earning ID: ${topUser.userId}`);
+        } else {
+            console.log(`⚠️ WARNING: Top ID ${SYSTEM_TOP_ID} not found in database!`);
+        }
+    }
 
     // ✨ Unique ID Generator
     let newUserId;
@@ -581,7 +581,7 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
       name, mobile, email, country,
       password: generatedPassword, 
       transactionPassword: generatedPassword, 
-    //   sponsorId: actualSponsorId, 
+      sponsorId: actualSponsorId, 
       walletAddress: walletAddress, // Address same allow kiya hai as per your request
       role: 'user',
       ipAddress: userIP,
@@ -862,7 +862,7 @@ router.post('/forgot-password', checkFeature(), async (req, res) => {
 
     await user.save();
 
-    const resetLink = `https://helpingpools.online/reset-password/${resetToken}`;
+    const resetLink = `https://cryptocommunity.live/reset-password/${resetToken}`;
     
     // 📧 SEND EMAIL
     await sendEmail({
@@ -932,7 +932,7 @@ router.post('/reset-password/:token', async (req, res) => {
           </div>
 
           <br/>
-          <a href="https://helpingpools.online/login"
+          <a href="https://cryptocommunity.live/login"
           style="background:#1e88e5; color:#fff; padding:12px 25px; text-decoration:none; border-radius:6px;">
           🔐 Login Now
           </a>

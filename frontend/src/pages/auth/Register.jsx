@@ -2977,7 +2977,7 @@ function Register() {
                 </div>
               </div>
 
-              {/* <p
+              <p
                 className="hp-sponsor-result"
                 style={{
                   color:
@@ -2991,7 +2991,7 @@ function Register() {
                     ? "Sponsor not found"
                     : `Verified sponsor: ${sponsorName}`
                   : " "}
-              </p> */}
+              </p>
             </div>
 
             {/* PERSONAL DETAILS */}
