@@ -818,8 +818,7 @@ router.get('/fix-missed-rewards', async (req, res) => {
 // C:\Users\HP\Desktop\Cryptocommunity\backend\routes\user.js
 
  
- const { getMonthlyLegStats } = require('../cron/monthlyRewardCron');
-
+ 
 // 🔥 Target 8 hata diya, sirf Target 7 tak rakha hai
 const REWARD_MILESTONES = [
   { target: 50, strongLeg: 25, otherLegs: 25, reward: 30, title: "Target 1" },
