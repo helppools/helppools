@@ -10296,7 +10296,7 @@ export default function Plan() {
       </div>
 
       <div className="hp-plan-footer">
-        HELPING POOLS • PACKAGE PROGRESS TRACKER
+        HELPING POOLS • PACKAGE PROGRESS TRACKER...
       </div>
     </div>
   );
