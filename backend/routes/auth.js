@@ -514,16 +514,16 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
             return res.status(403).json({ message: "Access Denied: Your device has been blocked due to a policy violation." });
         }
 
-        // Check for recent registration from this Device in the last 5 minutes
-        const fiveMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
-        const recentRegistrationDevice = await User.findOne({ 
-            deviceId: deviceId, 
-            createdAt: { $gte: fiveMinutesAgo } 
-        });
+        // // Check for recent registration from this Device in the last 5 minutes
+        // const fiveMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
+        // const recentRegistrationDevice = await User.findOne({ 
+        //     deviceId: deviceId, 
+        //     createdAt: { $gte: fiveMinutesAgo } 
+        // });
 
-        if (recentRegistrationDevice) {
-            return res.status(429).json({ message: "Anti-Spam: Multiple quick registrations from the same device are not allowed." });
-        }
+        // if (recentRegistrationDevice) {
+        //     return res.status(429).json({ message: "Anti-Spam: Multiple quick registrations from the same device are not allowed." });
+        // }
     }
     // ==========================================
     // 🛡️ ANTI-BOT SECURITY LAYERS END HERE

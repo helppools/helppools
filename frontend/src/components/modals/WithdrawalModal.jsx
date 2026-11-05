@@ -12369,8 +12369,7 @@ const WithdrawalModal = ({ userId, onClose }) => {
                   {isLeader ? (
                     <div className="hp-withdraw-warning">
                       <Info size={17} />
-                      Leaders cannot withdraw funds directly from here.
-                    </div>
+...                    </div>
                   ) : (
                     <>
                       {incomeCards.map((income) => (

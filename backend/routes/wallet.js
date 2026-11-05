@@ -1181,6 +1181,15 @@ router.post("/withdraw", authMiddleware, async (req, res) => {
       });
     }
 
+    // LEADER CANNOT WITHDRAW
+// LEADER CANNOT WITHDRAW OR TRANSFER INCOME TO WALLET
+if (String(user.role).toLowerCase() === "leader") {
+  return res.status(403).json({
+    success: false,
+    message: "Leader accounts are not allowed to withdraw or credit income to wallet."
+  });
+}
+
     if (!user.isToppedUp) {
       return res.status(400).json({
         message: "An active top-up is required."
@@ -1342,6 +1351,14 @@ router.post("/credit-to-wallet", authMiddleware, async (req, res) => {
         message: "User not found."
       });
     }
+
+    // LEADER CANNOT WITHDRAW OR TRANSFER INCOME TO WALLET
+if (String(user.role).toLowerCase() === "leader") {
+  return res.status(403).json({
+    success: false,
+    message: "Leader accounts are not allowed to withdraw or credit income to wallet."
+  });
+}
 
     if (!user.isToppedUp) {
       return res.status(400).json({

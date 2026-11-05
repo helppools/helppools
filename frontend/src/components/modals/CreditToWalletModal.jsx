@@ -7915,8 +7915,7 @@ const CreditToWalletModal = ({ userId, onClose }) => {
                   {isLeader ? (
                     <div className="hp-withdraw-total">
                       <Info size={17} />
-                      Leaders cannot credit funds from here.
-                    </div>
+...                    </div>
                   ) : (
                     <>
                       {incomeCards.map((income) => (

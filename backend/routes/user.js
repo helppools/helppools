@@ -1407,6 +1407,7 @@ router.put("/topup/:userId", authMiddleware, async (req, res) => {
 // LEADER TOP-UP ROUTE
 // ============================================================
 
+
 router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
   let walletDebited = false;
   let packageSaved = false;
@@ -1418,6 +1419,8 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
   let targetUserId = null;
   let amount = 0;
 
+  let isFreeFirstPackage = false;
+
   const now = new Date();
 
   try {
@@ -1428,18 +1431,21 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
 
     const packageSteps = [30, 60, 120, 240, 480, 960];
 
+    // VALIDATE TARGET USER ID
     if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
       return res.status(400).json({
         message: "Invalid target user ID."
       });
     }
 
+    // VALIDATE PACKAGE
     if (!packageSteps.includes(amount)) {
       return res.status(400).json({
         message: "Invalid package amount."
       });
     }
 
+    // FIND CURRENT USER
     const currentUser = await User.findOne({
       userId: req.user.userId
     });
@@ -1452,12 +1458,14 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
 
     currentUserId = currentUser.userId;
 
-    if (!["leader", "superleader"].includes(currentUser.role)) {
+    // ONLY LEADER ROLE ALLOWED
+    if (currentUser.role !== "leader") {
       return res.status(403).json({
-        message: "Only leaders and superleaders can use this route."
+        message: "Only leaders can use this route."
       });
     }
 
+    // TRANSACTION PASSWORD VALIDATION
     if (!transactionPassword) {
       return res.status(400).json({
         message: "Transaction password is required."
@@ -1474,6 +1482,7 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       });
     }
 
+    // FIND TARGET USER
     const targetUser = await User.findOne({
       userId: targetUserId
     });
@@ -1490,14 +1499,20 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       });
     }
 
-    // ONLY OWN DIRECT REFERRAL
-    if (Number(targetUser.sponsorId) !== Number(currentUser.userId)) {
+    // ALLOW SELF OR OWN DIRECT REFERRAL ONLY
+    const isSelfActivation =
+      Number(targetUser.userId) === Number(currentUserId);
+
+    const isDirectReferral =
+      Number(targetUser.sponsorId) === Number(currentUserId);
+
+    if (!isSelfActivation && !isDirectReferral) {
       return res.status(403).json({
-        message: "You can only activate your own direct referral."
+        message: "You can only activate yourself or your own direct referral."
       });
     }
 
-    // STRICT PACKAGE SEQUENCE
+    // CHECK PREVIOUS PACKAGES
     const previousSubscriptions = await PackageSubscription.find({
       userId: targetUserId
     }).select("packageAmount").lean();
@@ -1524,6 +1539,7 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       ? Math.max(...previousAmounts)
       : 0;
 
+    // STRICT PACKAGE SEQUENCE
     const currentIndex = packageSteps.indexOf(highestPackage);
 
     const nextPackage = highestPackage === 0
@@ -1542,30 +1558,39 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       });
     }
 
+    // FIRST $30 PACKAGE IS FREE ONLY ONCE
+    isFreeFirstPackage =
+      amount === 30 && highestPackage === 0;
+
     const purchaseType = highestPackage === 0
       ? "FIRST_PURCHASE"
       : "UPGRADE";
 
     const cycleNumber = 1;
 
-    // LEADER WALLET DEDUCTION
-    const debitResult = await User.updateOne(
-      {
-        userId: currentUserId,
-        walletBalance: { $gte: amount }
-      },
-      {
-        $inc: { walletBalance: -amount }
+    // WALLET DEDUCTION
+    // FIRST $30 = FREE
+    // ALL OTHER PACKAGES = PAID
+
+    if (!isFreeFirstPackage) {
+      const debitResult = await User.updateOne(
+        {
+          userId: currentUserId,
+          walletBalance: { $gte: amount }
+        },
+        {
+          $inc: { walletBalance: -amount }
+        }
+      );
+
+      if (debitResult.modifiedCount !== 1) {
+        return res.status(400).json({
+          message: `Insufficient wallet balance. Required: $${amount}.`
+        });
       }
-    );
 
-    if (debitResult.modifiedCount !== 1) {
-      return res.status(400).json({
-        message: `Insufficient wallet balance. Required: $${amount}.`
-      });
+      walletDebited = true;
     }
-
-    walletDebited = true;
 
     // SAVE TARGET USER PACKAGE
     const packageEntry = {
@@ -1608,12 +1633,14 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
         pausedAt: null,
         totalPausedSeconds: 0
       },
-      notes: `Direct referral package purchased by leader ${currentUserId}`
+      notes: isSelfActivation
+        ? `Self package activated by leader ${currentUserId}`
+        : `Direct referral package activated by leader ${currentUserId}`
     });
 
     subscriptionId = subscription._id;
 
-    // TOP-UP TRANSACTION
+    // CREATE TOP-UP TRANSACTION
     const transaction = await Transaction.create({
       userId: targetUserId,
       type: "topup",
@@ -1622,7 +1649,9 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       toUserId: targetUserId,
       package: amount,
       plan: "Global Auto-Pool",
-      description: `Leader package ${purchaseType}: $${amount}`,
+      description: isFreeFirstPackage
+        ? `Free first $30 package activated by leader ${currentUserId}`
+        : `Leader package ${purchaseType}: $${amount}`,
       status: "completed",
       date: now
     });
@@ -1652,7 +1681,17 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Direct referral package of $${amount} activated successfully.`,
+
+      message: isFreeFirstPackage
+        ? "First $30 package activated successfully without wallet deduction."
+        : `Package of $${amount} activated successfully.`,
+
+      freePackage: isFreeFirstPackage,
+
+      activationType: isSelfActivation
+        ? "SELF"
+        : "DIRECT_REFERRAL",
+
       package: {
         subscriptionId: subscription._id,
         userId: targetUserId,
@@ -1661,6 +1700,7 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
         cycleNumber,
         status: subscription.status
       },
+
       walletBalance: Number(freshWallet?.walletBalance || 0),
       transactionId: transaction._id
     });
@@ -1674,7 +1714,9 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       }
 
       if (transactionId) {
-        await Transaction.deleteOne({ _id: transactionId });
+        await Transaction.deleteOne({
+          _id: transactionId
+        });
       }
 
       if (subscriptionId) {
