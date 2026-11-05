@@ -297,8 +297,7 @@ const path = require('path');
 const allRoutes = require('./routes');
 
 const startSweeper = require('./cron/sweepJob');
- const startGlobalGrowthCron = require('./cron/autoGlobalGrowth');
-
+ 
 // 📦 NEW: Package Progress Cron
 const {
     startPackageProgressCron,
@@ -415,11 +414,7 @@ async function startServer() {
         }
 
         
-
-        if (typeof startGlobalGrowthCron === 'function') {
-            startGlobalGrowthCron();
-            console.log('✅ Global Auto-Growth Cron Started');
-        }
+ 
 
         // 📦 NEW: Start Package Progress Cron
         if (typeof startPackageProgressCron === 'function') {
