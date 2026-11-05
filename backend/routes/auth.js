@@ -594,48 +594,192 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
 
     // 👉 EMAIL TEMPLATE (Active)
     try {
-        await sendEmail({
-            email: user.email,
-            subject: '🎉 Welcome to Financial Saarthi!',
-            html: `
-            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid #eaeaea;">
-                <div style="background-color: #2b4450; padding: 40px 20px; text-align: center; color: #ffffff;">
-                    <h1 style="margin: 0; font-size: 28px; font-weight: bold;">🚀 Welcome to Financial Saarthi</h1>
-                    <p style="margin: 10px 0 0 0; font-size: 15px; color: #cccccc;">Your journey to financial growth starts here</p>
-                </div>
-                <div style="padding: 40px 30px; color: #333333;">
-                    <p style="font-size: 16px; margin-top: 0; margin-bottom: 15px;">Hello <strong>${user.name}</strong>,</p>
-                    <p style="font-size: 15px; line-height: 1.6; color: #555555; margin-bottom: 20px;">
-                        Congratulations! Your account has been successfully created. Get ready to build your global network, unlock exciting <strong>Community Earning rewards</strong>, and track your daily growth with our secure platform. We are thrilled to have you on board! 🌟
-                    </p>
-                    <p style="font-size: 15px; line-height: 1.6; color: #555555; margin-bottom: 30px;">
-                        Please find your confidential login details below:
-                    </p>
-                    <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 35px; border-left: 4px solid #1e88e5;">
-                        <p style="margin: 0 0 15px 0; font-size: 16px; color: #333;">
-                            <span style="display: inline-block; width: 25px;">👤</span> <strong>User ID:</strong> ${user.userId}
-                        </p>
-                        <p style="margin: 0 0 15px 0; font-size: 16px; color: #333;">
-                            <span style="display: inline-block; width: 25px;">🔑</span> <strong>Login Password:</strong> ${user.password}
-                        </p>
-                        <p style="margin: 0; font-size: 16px; color: #333;">
-                            <span style="display: inline-block; width: 25px;">🛡️</span> <strong>Transaction Password:</strong> ${user.transactionPassword}
-                        </p>
-                    </div>
-                    <div style="text-align: center; margin-bottom: 40px;">
-                        <a href="https://financialsaarthi.com/login" style="display: inline-block; background-color: #1e88e5; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(30,136,229,0.3);">🔐 Login to Dashboard</a>
-                    </div>
-                    <p style="font-size: 14px; color: #d32f2f; margin: 0; background-color: #ffebee; padding: 12px; border-radius: 6px;">
-                        ⚠️ <strong>Security Alert:</strong> Please do not share your login or transaction passwords with anyone for your account's safety.
-                    </p>
-                </div>
-                <div style="background-color: #1a1a1a; padding: 20px; text-align: center; color: #888888; font-size: 13px;">
-                    © 2026 Financial Saarthi. All rights reserved.<br>
-                    <span style="font-size: 11px;">This is an automated message, please do not reply to this email.</span>
-                </div>
-            </div>
-            ` 
-        });
+       
+
+await sendEmail({
+    email: user.email,
+    subject: '🎉 Welcome to HelpingPools – Your Account is Ready!',
+    html: `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin:0;padding:0;background:#f3f6f4;font-family:Arial,Helvetica,sans-serif;">
+
+        <div style="display:none;max-height:0;overflow:hidden;">
+            Welcome to HelpingPools! Your account has been successfully created.
+        </div>
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="background:#f3f6f4;padding:30px 12px;">
+            <tr>
+                <td align="center">
+
+                    <table width="600" cellpadding="0" cellspacing="0" border="0"
+                        style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5eee8;">
+
+                        <!-- HEADER -->
+                        <tr>
+                            <td align="center"
+                                style="background:#087443;padding:38px 25px;color:#ffffff;">
+
+                                <div style="font-size:38px;margin-bottom:12px;">
+                                    🌱
+                                </div>
+
+                                <h1 style="margin:0;font-size:30px;font-weight:700;color:#ffffff;">
+                                    Welcome to HelpingPools!
+                                </h1>
+
+                                <p style="margin:12px 0 0;font-size:15px;line-height:24px;color:#e2f5e9;">
+                                    Together We Grow, Together We Help
+                                </p>
+                            </td>
+                        </tr>
+
+                        <!-- BODY -->
+                        <tr>
+                            <td style="padding:35px 30px;color:#333333;">
+
+                                <h2 style="margin:0 0 15px;font-size:22px;color:#173c2b;">
+                                    Hello ${String(user.name || 'Member').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}! 👋
+                                </h2>
+
+                                <p style="font-size:15px;line-height:26px;color:#58665e;margin:0 0 18px;">
+                                    Congratulations! Your HelpingPools account has been
+                                    successfully created.
+                                </p>
+
+                                <p style="font-size:15px;line-height:26px;color:#58665e;margin:0 0 25px;">
+                                    We're delighted to welcome you to our community.
+                                    Get started by exploring HelpingPools, connecting
+                                    with the community and discovering the features
+                                    available in your account.
+                                </p>
+
+                                <!-- ACCOUNT DETAILS -->
+                                <div style="background:#f0f8f3;border:1px solid #dceee2;border-radius:10px;padding:22px;margin-bottom:25px;">
+
+                                    <h3 style="margin:0 0 18px;color:#087443;font-size:18px;">
+                                        Your Account Details
+                                    </h3>
+
+                                    <p style="margin:0 0 12px;font-size:15px;color:#46554b;">
+                                        <strong>👤 User ID:</strong>
+                                        ${String(user.userId || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+                                    </p>
+
+                                    <p style="margin:0 0 12px;font-size:15px;color:#46554b;">
+                                        <strong>✉️ Registered Email:</strong>
+                                        ${String(user.email || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+                                    </p>
+
+                                    <p style="margin:0 0 12px;font-size:15px;color:#46554b;">
+                                        <strong>🔑 Login Password:</strong>
+                                        <span style="color:#087443;font-weight:bold;">
+                                            ${String(generatedPassword || '').replace(/[&<>"']/g, c => ({
+                                                '&':'&amp;',
+                                                '<':'&lt;',
+                                                '>':'&gt;',
+                                                '"':'&quot;',
+                                                "'":'&#39;'
+                                            }[c]))}
+                                        </span>
+                                    </p>
+
+                                    <p style="margin:0;font-size:15px;color:#46554b;">
+                                        <strong>🛡️ Transaction Password:</strong>
+                                        <span style="color:#087443;font-weight:bold;">
+                                            ${String(generatedPassword || '').replace(/[&<>"']/g, c => ({
+                                                '&':'&amp;',
+                                                '<':'&lt;',
+                                                '>':'&gt;',
+                                                '"':'&quot;',
+                                                "'":'&#39;'
+                                            }[c]))}
+                                        </span>
+                                    </p>
+
+                                </div>
+
+                                <!-- LOGIN BUTTON -->
+                                <div style="text-align:center;margin:30px 0;">
+
+                                    <a href="https://helpingpools.online/login"
+                                        style="display:inline-block;background:#087443;color:#ffffff;text-decoration:none;padding:15px 35px;border-radius:8px;font-size:16px;font-weight:bold;">
+                                        🚀 Login to Your Account
+                                    </a>
+
+                                </div>
+
+                                <!-- SECURITY NOTICE -->
+                                <div style="background:#fff8e8;border-left:4px solid #e5a52b;padding:15px;border-radius:5px;margin-bottom:25px;">
+
+                                    <p style="margin:0;font-size:13px;line-height:22px;color:#72551b;">
+                                        <strong>🔒 Security Reminder</strong><br>
+                                        Never share your login password or transaction
+                                        password with anyone. For your security, change
+                                        your passwords after your first login.
+                                    </p>
+
+                                </div>
+
+                                <p style="font-size:14px;line-height:24px;color:#68756c;margin:0;">
+                                    If you have any questions or need assistance,
+                                    please contact our support team.
+                                </p>
+
+                                <p style="font-size:15px;color:#34483b;margin:22px 0 0;">
+                                    Best Regards,<br>
+                                    <strong style="color:#087443;">Team HelpingPools</strong>
+                                </p>
+
+                            </td>
+                        </tr>
+
+                        <!-- FOOTER -->
+                        <tr>
+                            <td align="center"
+                                style="background:#173c2b;padding:25px 20px;color:#d5e8dc;">
+
+                                <h3 style="margin:0 0 10px;color:#ffffff;font-size:19px;">
+                                    HelpingPools
+                                </h3>
+
+                                <p style="margin:0 0 12px;font-size:13px;line-height:22px;">
+                                    Building a Better Community Together.
+                                </p>
+
+                                <p style="margin:0;font-size:12px;color:#b7cbbd;">
+                                    Website:
+                                    <a href="https://helpingpools.online"
+                                        style="color:#ffffff;text-decoration:none;">
+                                        helpingpools.online
+                                    </a>
+                                </p>
+
+                                <p style="margin:15px 0 0;font-size:11px;color:#a9beb0;">
+                                    © ${new Date().getFullYear()} HelpingPools. All rights reserved.<br>
+                                    This is an automated email. Please do not reply directly.
+                                </p>
+
+                            </td>
+                        </tr>
+
+                    </table>
+
+                </td>
+            </tr>
+        </table>
+
+    </body>
+    </html>
+    `
+});
+
+
     } catch (emailErr) { 
         console.error("Email failed:", emailErr); 
     }
@@ -653,6 +797,10 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
   }
 });
  
+
+
+
+
 
 
 
