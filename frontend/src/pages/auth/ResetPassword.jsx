@@ -1,186 +1,569 @@
+
 import React, { useState } from 'react';
-import api from '../../api/axios'; // Apna API path check kar lena
+import api from '../../api/axios';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Lock, ArrowRight, ShieldCheck, Globe, Eye, EyeOff } from 'lucide-react'; // Eye and EyeOff added
+import {
+  Lock,
+  ArrowRight,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle
+} from 'lucide-react';
 
 const ResetPassword = () => {
-  const { token } = useParams(); // URL se token nikalne ke liye
+  const { token } = useParams();
   const navigate = useNavigate();
-  
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // States for toggling password visibility
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
-    
+
+    setError('');
+    setMessage('');
+
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters long');
       return;
     }
 
     setLoading(true);
-    setError('');
-    setMessage('');
 
     try {
-      // Backend ko request bhej rahe hain
       const res = await api.post(`/auth/reset-password/${token}`, {
         newPassword,
       });
-      
-      setMessage(res.data.message || "Password reset successfully!");
-      
-      // 2 second baad Login page par bhej denge
+
+      setMessage(res.data.message || 'Password reset successfully!');
+
       setTimeout(() => {
         navigate('/login');
       }, 2000);
 
     } catch (err) {
-      setError(err.response?.data?.message || 'Link expired or invalid.');
+      setError(
+        err.response?.data?.message || 'Link expired or invalid.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 pt-24 md:pt-32 relative overflow-hidden font-sans selection:bg-emerald-500/30">
-      
-      {/* --- GLOBAL STYLES & ANIMATIONS (Matching other pages) --- */}
+    <div className="hp-reset-page">
+
       <style>{`
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-15px); } }
-        @keyframes pulseGlow { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        .animate-pulse-glow { animation: pulseGlow 5s ease-in-out infinite; }
-        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); }
+        .hp-reset-page {
+          min-height: 100vh;
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 110px 18px 40px;
+          position: relative;
+          overflow: hidden;
+          font-family: inherit;
+          background: #f1f8f4;
+          box-sizing: border-box;
+        }
+
+        .hp-reset-page * {
+          box-sizing: border-box;
+        }
+
+        .hp-reset-orb {
+          position: fixed;
+          width: 380px;
+          height: 380px;
+          border-radius: 50%;
+          filter: blur(100px);
+          pointer-events: none;
+          opacity: .17;
+        }
+
+        .hp-reset-orb.one {
+          top: -160px;
+          left: -120px;
+          background: #078653;
+        }
+
+        .hp-reset-orb.two {
+          bottom: -170px;
+          right: -120px;
+          background: #d8b65e;
+        }
+
+        .hp-reset-navbar {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          padding: 17px 5%;
+          background: rgba(255,255,255,.9);
+          border-bottom: 1px solid #dcebe1;
+          box-shadow: 0 4px 18px rgba(0,60,35,.05);
+          z-index: 5;
+        }
+
+        .hp-reset-nav-inner {
+          max-width: 1200px;
+          margin: auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .hp-reset-brand {
+          color: #075b42;
+          font-size: 21px;
+          font-weight: 900;
+          letter-spacing: .5px;
+          text-decoration: none;
+        }
+
+        .hp-reset-brand span {
+          color: #c59b36;
+        }
+
+        .hp-reset-login {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 10px 18px;
+          background: #eaf6ee;
+          border: 1px solid #cde6d5;
+          color: #08734d;
+          border-radius: 11px;
+          font-size: 13px;
+          font-weight: 800;
+          text-decoration: none;
+          transition: .2s;
+        }
+
+        .hp-reset-login:hover {
+          background: #08734d;
+          color: white;
+        }
+
+        .hp-reset-card {
+          width: 100%;
+          max-width: 460px;
+          padding: 38px;
+          background: #fff;
+          border: 1px solid #dcebe1;
+          border-radius: 25px;
+          box-shadow: 0 18px 55px rgba(0,65,38,.10);
+          position: relative;
+          z-index: 2;
+        }
+
+        .hp-reset-header {
+          text-align: center;
+          margin-bottom: 27px;
+        }
+
+        .hp-reset-icon {
+          width: 76px;
+          height: 76px;
+          margin: 0 auto 19px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 22px;
+          background: linear-gradient(135deg,#075b42,#119363);
+          color: #f8df9b;
+          box-shadow: 0 10px 25px rgba(7,91,66,.2);
+        }
+
+        .hp-reset-tag {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          color: #a47c24;
+          background: #fff8e6;
+          border: 1px solid #f0e0b7;
+          border-radius: 30px;
+          padding: 7px 12px;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 1px;
+          margin-bottom: 13px;
+        }
+
+        .hp-reset-title {
+          color: #075b42;
+          font-size: 27px;
+          line-height: 1.25;
+          font-weight: 900;
+          margin: 0 0 9px;
+        }
+
+        .hp-reset-subtitle {
+          color: #718078;
+          font-size: 13px;
+          line-height: 1.6;
+          margin: 0;
+        }
+
+        .hp-reset-field {
+          margin-bottom: 19px;
+        }
+
+        .hp-reset-label {
+          display: block;
+          color: #426253;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: .8px;
+          margin: 0 0 9px 3px;
+          text-transform: uppercase;
+        }
+
+        .hp-reset-input-wrap {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .hp-reset-input-icon {
+          position: absolute;
+          left: 15px;
+          color: #81998c;
+          pointer-events: none;
+          display: flex;
+        }
+
+        .hp-reset-input {
+          width: 100%;
+          min-width: 0;
+          height: 53px;
+          padding: 0 48px 0 45px;
+          background: #f5f9f6;
+          border: 1px solid #dce9df;
+          border-radius: 12px;
+          outline: none;
+          color: #164d36;
+          font-size: 14px;
+          font-weight: 600;
+          transition: .2s;
+        }
+
+        .hp-reset-input:focus {
+          background: white;
+          border-color: #0a8959;
+          box-shadow: 0 0 0 4px rgba(10,137,89,.10);
+        }
+
+        .hp-reset-input::placeholder {
+          color: #a5b5aa;
+          font-weight: 400;
+        }
+
+        .hp-reset-eye {
+          position: absolute;
+          right: 13px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: none;
+          background: transparent;
+          color: #81998c;
+          cursor: pointer;
+          padding: 5px;
+        }
+
+        .hp-reset-eye:hover {
+          color: #08734d;
+        }
+
+        .hp-reset-submit {
+          width: 100%;
+          min-height: 54px;
+          margin-top: 5px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          border: none;
+          border-radius: 12px;
+          background: linear-gradient(110deg,#075b42,#0d9562);
+          color: #fff;
+          font-size: 13px;
+          font-weight: 900;
+          letter-spacing: 1px;
+          cursor: pointer;
+          box-shadow: 0 8px 20px rgba(7,91,66,.2);
+          transition: .2s;
+        }
+
+        .hp-reset-submit:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 25px rgba(7,91,66,.28);
+        }
+
+        .hp-reset-submit:disabled {
+          opacity: .65;
+          cursor: wait;
+        }
+
+        .hp-reset-alert {
+          display: flex;
+          align-items: flex-start;
+          gap: 9px;
+          padding: 13px;
+          border-radius: 11px;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.5;
+          margin-bottom: 18px;
+          overflow-wrap: anywhere;
+        }
+
+        .hp-reset-success {
+          color: #08734d;
+          background: #eaf8ef;
+          border: 1px solid #c6e9d0;
+        }
+
+        .hp-reset-error {
+          color: #b42318;
+          background: #fff1f0;
+          border: 1px solid #ffd3cf;
+        }
+
+        .hp-reset-footer {
+          margin-top: 23px;
+          padding-top: 19px;
+          border-top: 1px solid #edf2ee;
+          text-align: center;
+          color: #84958a;
+          font-size: 12px;
+        }
+
+        .hp-reset-footer a {
+          color: #08734d;
+          font-weight: 900;
+          text-decoration: none;
+        }
+
+        .hp-reset-footer a:hover {
+          text-decoration: underline;
+        }
+
+        @media (max-width: 520px) {
+          .hp-reset-page {
+            padding: 100px 14px 25px;
+          }
+
+          .hp-reset-navbar {
+            padding: 14px 16px;
+          }
+
+          .hp-reset-brand {
+            font-size: 17px;
+          }
+
+          .hp-reset-login {
+            padding: 9px 12px;
+            font-size: 12px;
+          }
+
+          .hp-reset-card {
+            padding: 27px 21px;
+            border-radius: 20px;
+          }
+
+          .hp-reset-title {
+            font-size: 24px;
+          }
+
+          .hp-reset-icon {
+            width: 67px;
+            height: 67px;
+          }
+        }
+
+        @media (max-width: 350px) {
+          .hp-reset-card {
+            padding: 23px 15px;
+          }
+
+          .hp-reset-brand {
+            font-size: 15px;
+          }
+        }
       `}</style>
 
-      {/* Abstract Glowing Orbs */}
-      <div className="fixed top-[-10%] left-[-5%] w-[40vw] h-[40vw] bg-emerald-400/20 blur-[100px] rounded-full pointer-events-none animate-pulse-glow"></div>
-      <div className="fixed bottom-[-10%] right-[-5%] w-[40vw] h-[40vw] bg-green-500/15 blur-[100px] rounded-full pointer-events-none animate-pulse-glow" style={{ animationDelay: '2s' }}></div>
+      <div className="hp-reset-orb one"></div>
+      <div className="hp-reset-orb two"></div>
 
       {/* Navbar */}
-      <nav className="fixed top-0 left-0 w-full z-50 glass-panel shadow-sm px-4 md:px-8 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3 no-underline group">
-            <span className="text-xl md:text-2xl font-black text-slate-900 tracking-wider">
-              CRYPTO<span className="text-emerald-500">COMMUNITY</span>
-            </span>
+      <nav className="hp-reset-navbar">
+        <div className="hp-reset-nav-inner">
+          <Link to="/" className="hp-reset-brand">
+            HELPING<span>POOLS</span>
           </Link>
-          <Link to="/login" className="bg-emerald-50 text-emerald-600 font-bold py-2.5 px-6 rounded-xl hover:bg-emerald-500 hover:text-white transition-all shadow-sm flex items-center gap-2 border border-emerald-100 hover:border-emerald-500">
-            <Lock size={16} /> <span className="hidden sm:inline">Secure Login</span><span className="sm:hidden">Login</span>
+
+          <Link to="/login" className="hp-reset-login">
+            <Lock size={15} />
+            Secure Login
           </Link>
         </div>
       </nav>
 
-      {/* --- MAIN CONTAINER --- */}
-      <div className="w-full max-w-md bg-white border border-slate-100 rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-6 md:p-10 relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700 mt-4">
-        
-        {/* Header Section */}
-        <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-50 mb-6 animate-float border border-emerald-100 shadow-[0_10px_25px_rgba(16,185,129,0.15)] text-emerald-500 relative">
-                <div className="absolute inset-0 bg-emerald-400/20 rounded-full animate-ping"></div>
-                <ShieldCheck size={40} strokeWidth={2} className="relative z-10" />
-            </div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Set New Password</h2>
-            <p className="text-slate-500 font-medium text-sm">Create a strong password for your account</p>
+      {/* Reset Password Card */}
+      <div className="hp-reset-card">
+
+        <div className="hp-reset-header">
+          <div className="hp-reset-icon">
+            <ShieldCheck size={37} strokeWidth={2} />
+          </div>
+
+          <div className="hp-reset-tag">
+            <Sparkles size={12} />
+            ACCOUNT SECURITY
+          </div>
+
+          <h2 className="hp-reset-title">
+            Set New Password
+          </h2>
+
+          <p className="hp-reset-subtitle">
+            Create a strong new password to secure your Helping Pools account.
+          </p>
         </div>
 
-        {/* Messages */}
+        {/* Success Message */}
         {message && (
-          <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-600 px-4 py-3 rounded-xl text-sm text-center font-bold animate-in zoom-in duration-300 shadow-sm">
-            ✅ {message}
+          <div className="hp-reset-alert hp-reset-success" role="status">
+            <CheckCircle2 size={18} />
+            <span>{message}</span>
           </div>
         )}
+
+        {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm text-center font-bold animate-in zoom-in duration-300 shadow-sm">
-            ⚠️ {error}
+          <div className="hp-reset-alert hp-reset-error" role="alert">
+            <AlertCircle size={18} />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleResetPassword} className="space-y-5">
-            
-            {/* New Password Input */}
-            <div className="relative group">
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-2">New Password</label>
-                <div className="relative flex items-center">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                    </div>
-                    <input
-                        type={showNewPassword ? "text" : "password"}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 pl-12 pr-12 text-slate-900 font-bold focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 outline-none transition-all placeholder-slate-400 font-mono"
-                        placeholder=" "
-                        required
-                    />
-                    <button 
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
-                    >
-                        {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                </div>
-            </div>
+        <form onSubmit={handleResetPassword}>
 
-            {/* Confirm Password Input */}
-            <div className="relative group">
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-2">Confirm Password</label>
-                <div className="relative flex items-center">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                    </div>
-                    <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 pl-12 pr-12 text-slate-900 font-bold focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 outline-none transition-all placeholder-slate-400 font-mono"
-                        placeholder=" "
-                        required
-                    />
-                    <button 
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-emerald-500 transition-colors focus:outline-none"
-                    >
-                        {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                </div>
-            </div>
+          {/* New Password */}
+          <div className="hp-reset-field">
+            <label className="hp-reset-label">
+              New Password
+            </label>
 
-            {/* Submit Button */}
-            <button 
-                type="submit" 
-                disabled={loading}
-                className={`w-full py-4 mt-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold text-sm tracking-widest uppercase shadow-[0_10px_20px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_10px_30px_-10px_rgba(16,185,129,0.7)] transition-all flex items-center justify-center gap-2
-                 ${loading ? 'opacity-70 cursor-wait' : 'hover:-translate-y-1 active:scale-95'}
-                `}
-            >
-                {loading ? (
-                    <span className="flex items-center gap-2">
-                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        UPDATING...
-                    </span>
-                ) : (
-                    <>
-                        RESET PASSWORD <ArrowRight size={18} strokeWidth={3} />
-                    </>
-                )}
-            </button>
+            <div className="hp-reset-input-wrap">
+              <div className="hp-reset-input-icon">
+                <Lock size={19} />
+              </div>
+
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="hp-reset-input"
+                placeholder="Enter new password"
+                autoComplete="new-password"
+                required
+              />
+
+              <button
+                type="button"
+                className="hp-reset-eye"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+              >
+                {showNewPassword
+                  ? <EyeOff size={19} />
+                  : <Eye size={19} />
+                }
+              </button>
+            </div>
+          </div>
+
+          {/* Confirm Password */}
+          <div className="hp-reset-field">
+            <label className="hp-reset-label">
+              Confirm Password
+            </label>
+
+            <div className="hp-reset-input-wrap">
+              <div className="hp-reset-input-icon">
+                <Lock size={19} />
+              </div>
+
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="hp-reset-input"
+                placeholder="Confirm new password"
+                autoComplete="new-password"
+                required
+              />
+
+              <button
+                type="button"
+                className="hp-reset-eye"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword
+                  ? <EyeOff size={19} />
+                  : <Eye size={19} />
+                }
+              </button>
+            </div>
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="hp-reset-submit"
+          >
+            {loading ? (
+              <>
+                <span>UPDATING...</span>
+              </>
+            ) : (
+              <>
+                RESET PASSWORD
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
 
         </form>
+
+        <div className="hp-reset-footer">
+          Remember your password?{' '}
+          <Link to="/login">Back to Login</Link>
+        </div>
 
       </div>
     </div>

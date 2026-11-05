@@ -248,13 +248,15 @@ const generateUserId = async () => {
 // });
 
 // 🔥 RANDOM PASSWORD GENERATOR HELPER FUNCTION
+
 const generateRandomPassword = (length = 8) => {
-    // Sirf Capital letters hataye hain, small letters aur numbers wahi hain
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const chars = '0123456789';
     let pass = '';
+
     for (let i = 0; i < length; i++) {
         pass += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+
     return pass;
 };
 
@@ -650,95 +652,7 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
     res.status(500).json({ message: 'Server error.' });
   }
 });
-
-// router.post('/login', async (req, res) => {
-//   try {
-//     const { userId, password, deviceId } = req.body;
-//     const userIP = getClientIP(req);
-
-//     const user = await User.findOne({ userId });
-//     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-
-//     // 🛡️ SMART LOGIN LIMIT (5 Users Per IP + Admin Block)
-//     if (user.role !== 'admin') {
-//         const isLocalIP = userIP === '127.0.0.1' || userIP === '::1';
-
-//         if (!isLocalIP) {
-//             const rule = await IpRule.findOne({ ipAddress: userIP });
-            
-//             if (rule && rule.isBlocked) {
-//                 return res.status(403).json({ message: "Access Denied: Your IP has been blocked by the Administrator." });
-//             }
-
-//             // ✅ Login IP Limit Wapas Laga Di (Default 5)
-//           //  const allowedLimit = (rule && rule.limit) ? rule.limit : 5;
-//           const allowedLimit = (rule && rule.limit) ? rule.limit : 25;
-//             const uniqueUsersOnThisIP = await LoginHistory.distinct('userId', { ipAddress: userIP });
-
-//             if (uniqueUsersOnThisIP.length >= allowedLimit && !uniqueUsersOnThisIP.includes(user.userId)) {
-//                 return res.status(403).json({ 
-//                     message: `Access Denied: You have reached the maximum limit of ${allowedLimit} accounts per network.` 
-//                 });
-//             }
-//         }
-//     }
-
-//     // 🚀 DEVICE FINGERPRINT CHECK (Login ke time sirf block check)
-//     if (deviceId) {
-//         const isDeviceBlocked = await BlockedDevice.findOne({ deviceId });
-//         if (isDeviceBlocked) {
-//             return res.status(403).json({ message: "Access Denied: Your device has been blocked due to a policy violation." });        
-//         }
-//     }
-
-//     console.log(`User Logging In: ${user.email} | IP: ${userIP}`);
-
-//     // Maintenance & Security Checks
-//     const settings = await Setting.findOne();
-//     if (settings) {
-//         if (settings.maintenanceMode && user.role !== 'admin') {
-//             const whitelist = (settings.maintenanceWhitelist || []).map(String);
-//             if (!whitelist.includes(String(user.userId))) return res.status(503).json({ message: 'Maintenance Mode.' });
-//         }
-//         if (!settings.allowLogin && user.role !== 'admin') return res.status(403).json({ message: 'Login is disabled.' });
-//     }
-
-//     if (password.toLowerCase() !== user.password.toLowerCase()) return res.status(401).json({ message: 'Invalid credentials' });
-//     if (user.isBlocked) return res.status(403).json({ message: 'Account blocked.' });
-
-//     // ✅ IP Update (Migration)
-//     user.ipAddress = userIP; 
-    
-//     if (deviceId) {
-//         user.deviceId = deviceId;
-//     }
-    
-//     await user.save();
-
-//     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '50m' });
-
-//     // ✅ Save History with Real IP
-//     try {
-//        await LoginHistory.create({
-//          userId: user.userId,
-//          name: user.name,
-//          mobile: user.mobile,
-//          ipAddress: userIP 
-//        });
-//     } catch (hErr) { console.error('History failed'); }
-
-//     res.json({ message: 'Login successful', token, user: sanitizeUser(user) });
-
-//   } catch (err) {
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// });
-
-// ... (Aapke Forgot / Reset password ke routes same rahenge yahan) ...
-
-
-// ====================== FORGOT PASSWORD ======================
-
+ 
 
 
 
@@ -828,133 +742,474 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
   }
 });
 
+
+/* =====================================================
+   FORGOT PASSWORD
+===================================================== */
+
 router.post('/forgot-password', checkFeature(), async (req, res) => {
   const { userId } = req.body;
 
   try {
+    if (!userId) {
+      return res.status(400).json({
+        message: 'Please enter your User ID.'
+      });
+    }
+
     const user = await User.findOne({ userId });
-    if (!user) return res.status(404).json({ message: 'User not found.' });
 
-    // 🕒 RATE LIMITING LOGIC: Din mein sirf 3 Password Reset Emails
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found.'
+      });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({
+        message: 'No email address registered with this account.'
+      });
+    }
+
+    // Daily limit: 3 requests
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Agar last request aaj se pehle ki hai (kal ki ya purani), toh count 0 kardo (Reset)
-    if (!user.lastPasswordResetDate || user.lastPasswordResetDate < startOfToday) {
-        user.passwordResetCount = 0; 
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    if (
+      !user.lastPasswordResetDate ||
+      user.lastPasswordResetDate < startOfToday
+    ) {
+      user.passwordResetCount = 0;
     }
 
-    // Limit Check: Agar count 3 ya usse zyada hai, toh error de do
-    if (user.passwordResetCount >= 3) {
-        return res.status(429).json({ 
-            message: "Daily limit exceeded. You can only request a password reset 3 times a day." 
-        });
+    if ((user.passwordResetCount || 0) >= 3) {
+      return res.status(429).json({
+        message: 'Daily limit exceeded. Only 3 password reset requests are allowed per day.'
+      });
     }
 
-    // 🔐 Generate Reset Token
+    // Generate secure reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
-    user.resetToken = resetToken;
-    user.resetTokenExpiry = Date.now() + 3600000; // 1 hour
 
-    // 📈 Update limit count aur date
-    user.passwordResetCount += 1; 
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = Date.now() + 60 * 60 * 1000;
+
+    user.passwordResetCount = (user.passwordResetCount || 0) + 1;
     user.lastPasswordResetDate = now;
 
     await user.save();
 
-    const resetLink = `https://cryptocommunity.live/reset-password/${resetToken}`;
-    
-    // 📧 SEND EMAIL
+    // Helping Pools domain
+    const resetLink =
+      `https://helpingpools.online/reset-password/${resetToken}`;
+
+    // Escape name for HTML email
+    const safeName = String(user.name || 'Member').replace(
+      /[&<>"']/g,
+      char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]
+    );
+
+    // Send branded email
     await sendEmail({
       email: user.email,
-      subject: '🔐 Password Reset Request',
-      message: `Reset Link: ${resetLink}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-          <h2 style="color: #2E86C1;">Password Reset Request</h2>
-          <p>Hello <strong>${user.name}</strong>,</p>
-          <p>We received a request to reset your password. Click below:</p>
-          <p style="text-align:center;">
-            <a href="${resetLink}" style="padding:12px 24px;background:#2E86C1;color:white;text-decoration:none;border-radius:5px;">Reset Password</a>
-          </p>
-          <p>This link expires in 1 hour.</p>
-        </div>
+      subject: 'Password Reset Request | Helping Pools',
+
+      message: `
+Hello ${user.name || 'Member'},
+
+We received a request to reset your Helping Pools account password.
+
+Reset your password here:
+${resetLink}
+
+This link expires in 1 hour.
+
+If you did not request this, please ignore this email.
       `,
+
+      html: `
+      <div style="
+        margin:0;
+        padding:35px 12px;
+        background:#f1f8f4;
+        font-family:Arial,sans-serif;
+      ">
+        <div style="
+          max-width:520px;
+          margin:auto;
+          background:#ffffff;
+          border-radius:18px;
+          overflow:hidden;
+          border:1px solid #dcebe1;
+          box-shadow:0 10px 35px rgba(0,60,35,.08);
+        ">
+
+          <div style="
+            padding:28px 20px;
+            text-align:center;
+            background:linear-gradient(120deg,#075b42,#119363);
+          ">
+            <h1 style="
+              margin:0;
+              color:#ffffff;
+              font-size:25px;
+              font-weight:900;
+            ">
+              HELPING <span style="color:#f5d98a;">POOLS</span>
+            </h1>
+            <p style="
+              margin:9px 0 0;
+              color:#d9f2e3;
+              font-size:12px;
+              letter-spacing:2px;
+              font-weight:bold;
+            ">
+              ACCOUNT SECURITY
+            </p>
+          </div>
+
+          <div style="padding:32px 25px;text-align:center;">
+
+            <div style="
+              width:65px;
+              height:65px;
+              line-height:65px;
+              margin:0 auto 20px;
+              border-radius:18px;
+              background:#eaf6ee;
+              color:#08734d;
+              font-size:30px;
+            ">
+              &#128274;
+            </div>
+
+            <h2 style="
+              color:#075b42;
+              font-size:23px;
+              margin:0 0 15px;
+            ">
+              Password Reset Request
+            </h2>
+
+            <p style="color:#52665a;font-size:14px;line-height:1.7;">
+              Hello <strong>${safeName}</strong>,
+            </p>
+
+            <p style="color:#64756a;font-size:14px;line-height:1.7;">
+              We received a request to reset your Helping Pools account
+              password. Click below to create a new password.
+            </p>
+
+            <a href="${resetLink}" style="
+              display:inline-block;
+              margin:20px 0;
+              padding:15px 30px;
+              background:linear-gradient(110deg,#075b42,#119363);
+              color:#ffffff;
+              text-decoration:none;
+              border-radius:10px;
+              font-size:14px;
+              font-weight:bold;
+            ">
+              RESET MY PASSWORD
+            </a>
+
+            <div style="
+              padding:14px;
+              background:#fff8e6;
+              border:1px solid #f0e0b7;
+              border-radius:10px;
+              color:#8b6a22;
+              font-size:12px;
+              line-height:1.6;
+              text-align:left;
+            ">
+              <strong>Security Notice</strong><br/>
+              This password reset link expires in 1 hour.
+              Do not share this link with anyone.
+            </div>
+
+            <p style="
+              color:#87958b;
+              font-size:12px;
+              line-height:1.6;
+              margin-top:22px;
+            ">
+              If you did not request a password reset,
+              please ignore this email.
+            </p>
+
+          </div>
+
+          <div style="
+            padding:17px;
+            text-align:center;
+            background:#f5f9f6;
+            border-top:1px solid #e5eee7;
+            color:#829187;
+            font-size:11px;
+          ">
+            &copy; ${new Date().getFullYear()} Helping Pools.
+            All rights reserved.
+          </div>
+
+        </div>
+      </div>
+      `
     });
 
-    res.json({ message: '✅ Password reset link sent to your email.' });
+    return res.json({
+      message: 'Password reset link sent to your registered email.'
+    });
+
   } catch (err) {
     console.error('Forgot password error:', err);
-    res.status(500).json({ message: 'Server error. Please try again later.' });
+
+    return res.status(500).json({
+      message: 'Server error. Please try again later.'
+    });
   }
 });
 
-// ====================== RESET PASSWORD ======================
+
+/* =====================================================
+   RESET PASSWORD
+===================================================== */
+
 router.post('/reset-password/:token', async (req, res) => {
   const { token } = req.params;
   const { newPassword } = req.body;
 
   try {
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        message: 'Reset token and new password are required.'
+      });
+    }
+
+    if (
+      typeof newPassword !== 'string' ||
+      newPassword.length < 6
+    ) {
+      return res.status(400).json({
+        message: 'Password must be at least 6 characters long.'
+      });
+    }
+
+    // Find valid reset token
     const user = await User.findOne({
       resetToken: token,
-      resetTokenExpiry: { $gt: Date.now() },
+      resetTokenExpiry: { $gt: Date.now() }
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired token.' });
+      return res.status(400).json({
+        message: 'Invalid or expired password reset link.'
+      });
     }
 
-    // ✅ Update password
+    // Update login password only
     user.password = newPassword;
-    user.transactionPassword = newPassword;
 
+    // Remove token after successful reset
     user.resetToken = undefined;
     user.resetTokenExpiry = undefined;
 
     await user.save();
 
-    // ✅ EMAIL SEND (UPDATED)
+    // Confirmation email
     try {
+      const safeName = String(user.name || 'Member').replace(
+        /[&<>"']/g,
+        char => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        })[char]
+      );
+
       await sendEmail({
         email: user.email,
-        subject: '🔐 Password Reset Successful',
-        html: `
-        <div style="font-family: Arial; padding:20px;">
-          <h2>✅ Password Reset Successful</h2>
-          <p>Hello <b>${user.name}</b>,</p>
+        subject: 'Password Changed Successfully | Helping Pools',
 
-          <p>Your password has been updated successfully.</p>
+        message: `
+Hello ${user.name || 'Member'},
 
-          <div style="background:#f5f5f5; padding:15px; border-radius:8px;">
-            <p><b>User ID:</b> ${user.userId}</p>
-            <p><b>Password:</b> ${newPassword}</p>
-            <p><b>Transaction Password:</b> ${newPassword}</p>
-          </div>
+Your Helping Pools account password has been changed successfully.
 
-          <br/>
-          <a href="https://cryptocommunity.live/login"
-          style="background:#1e88e5; color:#fff; padding:12px 25px; text-decoration:none; border-radius:6px;">
-          🔐 Login Now
-          </a>
-        </div>
+User ID: ${user.userId}
+
+If you did not make this change, contact support immediately.
+
+Login:
+https://helpingpools.online/login
         `,
+
+        html: `
+        <div style="
+          margin:0;
+          padding:35px 12px;
+          background:#f1f8f4;
+          font-family:Arial,sans-serif;
+        ">
+          <div style="
+            max-width:520px;
+            margin:auto;
+            background:#ffffff;
+            border:1px solid #dcebe1;
+            border-radius:18px;
+            overflow:hidden;
+            box-shadow:0 10px 35px rgba(0,60,35,.08);
+          ">
+
+            <div style="
+              padding:28px 20px;
+              text-align:center;
+              background:linear-gradient(120deg,#075b42,#119363);
+            ">
+              <h1 style="
+                margin:0;
+                color:#ffffff;
+                font-size:25px;
+                font-weight:900;
+              ">
+                HELPING <span style="color:#f5d98a;">POOLS</span>
+              </h1>
+
+              <p style="
+                color:#d9f2e3;
+                font-size:12px;
+                letter-spacing:2px;
+                font-weight:bold;
+                margin:9px 0 0;
+              ">
+                SECURITY CONFIRMATION
+              </p>
+            </div>
+
+            <div style="padding:32px 25px;text-align:center;">
+
+              <div style="
+                width:65px;
+                height:65px;
+                line-height:65px;
+                margin:0 auto 20px;
+                border-radius:50%;
+                background:#eaf8ef;
+                color:#08734d;
+                font-size:32px;
+              ">
+                &#10004;
+              </div>
+
+              <h2 style="
+                color:#075b42;
+                font-size:23px;
+                margin:0 0 15px;
+              ">
+                Password Changed Successfully!
+              </h2>
+
+              <p style="color:#52665a;font-size:14px;line-height:1.7;">
+                Hello <strong>${safeName}</strong>,
+              </p>
+
+              <p style="color:#64756a;font-size:14px;line-height:1.7;">
+                Your Helping Pools account password has been
+                successfully updated.
+              </p>
+
+              <div style="
+                padding:16px;
+                margin:22px 0;
+                background:#f1f8f4;
+                border:1px solid #dcebe1;
+                border-radius:12px;
+                text-align:left;
+                color:#426253;
+                font-size:13px;
+                line-height:1.9;
+              ">
+                <strong>Account Details</strong><br/>
+                User ID: <strong>${user.userId}</strong><br/>
+                Password: <strong>Updated successfully</strong>
+              </div>
+
+              <a href="https://helpingpools.online/login" style="
+                display:inline-block;
+                padding:14px 30px;
+                background:linear-gradient(110deg,#075b42,#119363);
+                color:#ffffff;
+                text-decoration:none;
+                border-radius:10px;
+                font-size:14px;
+                font-weight:bold;
+              ">
+                LOGIN NOW
+              </a>
+
+              <p style="
+                color:#87958b;
+                font-size:12px;
+                line-height:1.6;
+                margin-top:22px;
+              ">
+                If you did not make this change, contact support
+                immediately to secure your account.
+              </p>
+
+            </div>
+
+            <div style="
+              padding:17px;
+              text-align:center;
+              background:#f5f9f6;
+              border-top:1px solid #e5eee7;
+              color:#829187;
+              font-size:11px;
+            ">
+              &copy; ${new Date().getFullYear()} Helping Pools.
+              All rights reserved.
+            </div>
+
+          </div>
+        </div>
+        `
       });
-    } catch (e) {
-      console.log("Email failed:", e.message);
+
+    } catch (emailError) {
+      console.error(
+        'Password confirmation email failed:',
+        emailError.message
+      );
     }
 
-    // ✅ RESPONSE ME DATA BHEJO
-    res.json({
-      message: 'Password reset successful',
-      userId: user.userId,
-      password: newPassword,
-      transactionPassword: newPassword,
+    return res.json({
+      message: 'Password reset successful.',
+      userId: user.userId
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Reset password error:', err);
+
+    return res.status(500).json({
+      message: 'Server error. Please try again later.'
+    });
   }
 });
+
 
 module.exports = router;

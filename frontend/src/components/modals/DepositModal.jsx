@@ -842,7 +842,7 @@ export default function DepositModal({ onClose, user, userId }) {
                 ) : (
                   <>
                     <RefreshCcw size={16} />
-                    I HAVE PAID - VERIFY
+                    VERIFY Your Deposite amount
                   </>
                 )}
               </button>

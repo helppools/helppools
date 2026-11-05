@@ -2395,7 +2395,7 @@ const TopUpModal = ({ onClose, onTopUpSuccess }) => {
               </div>
 
               <div>
-                <label className="hp-topup-label">Target  ID</label>
+                <label className="hp-topup-label">User ID</label>
 
                 {isPromoUser ? (
                   <div className="hp-topup-promo">
@@ -2410,7 +2410,7 @@ const TopUpModal = ({ onClose, onTopUpSuccess }) => {
 
                     <input
                       type="number"
-                      placeholder="Enter target  ID"
+                      placeholder="Enter User ID"
                       value={userId}
                       onChange={(e) => setUserId(e.target.value)}
                       className="hp-topup-input"

@@ -1,54 +1,308 @@
+// const mongoose = require("mongoose");
+
+// const transactionSchema = new mongoose.Schema(
+//   {
+//     userId: { type: Number, required: true, index: true },
+//     type: { type: String, required: true, index: true },
+//     source: { type: String, default: null },
+//     amount: { type: mongoose.Schema.Types.Decimal128, required: true },
+//     grossAmount: { type: mongoose.Schema.Types.Decimal128, default: 0 },
+//     fromUserId: { type: Number, default: null, index: true },
+//     toUserId: { type: Number, default: null, index: true },
+//     package: { type: Number, default: null },
+//         subscriptionId: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "PackageSubscription",
+//       default: null,
+//       index: true,
+//     },
+//     stageNumber: {
+//       type: Number,
+//       default: null,
+//     },
+//     idempotencyKey: {
+//       type: String,
+//       default: null,
+//     },
+//     package: {
+//   type: Number
+// },
+//     plan: { type: String, default: "Global Auto-Pool" },
+//     level: { type: Number, default: null },
+//     description: { type: String, default: "" },
+//     txHash: { type: String, default: null },
+//     adminNote: { type: String, default: null },
+//     status: { type: String, default: "completed", index: true },
+//     date: { type: Date, default: Date.now, index: true },
+//     fromAddress: { type: String },
+//     toAddress: { type: String },
+//     reversed: { type: Boolean, default: false },
+//     reversedAt: { type: Date, default: null },
+//     reversalReason: { type: String, default: "" },
+//     relatedTo: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "Transaction",
+//       default: null,
+//     },
+//   },
+//   { 
+//     timestamps: true,
+//     toJSON: { getters: true, virtuals: true },
+//     toObject: { getters: true, virtuals: true }
+//   }
+// );
+
+// // Puraane Indexes
+// transactionSchema.index({ userId: 1, date: -1 });
+
+// // 🔥 NAYE SUPER-FAST INDEXES (Ye loading time ko 15 sec se 1-2 sec kar denge)
+// transactionSchema.index({ createdAt: -1 }); 
+// transactionSchema.index({ type: 1, createdAt: -1 }); // Ye aapke Deposit page ke liye hai
+// transactionSchema.index(
+//   { idempotencyKey: 1 },
+//   {
+//     unique: true,
+//     partialFilterExpression: {
+//       idempotencyKey: { $type: "string" },
+//     },
+//   }
+// );
+
+// const transformAmount = (doc, ret) => {
+//   if (ret.amount) ret.amount = parseFloat(ret.amount.toString()) || 0;
+//   if (ret.grossAmount) ret.grossAmount = parseFloat(ret.grossAmount.toString()) || 0;
+//   return ret;
+// };
+
+// transactionSchema.set("toJSON", { transform: transformAmount });
+// transactionSchema.set("toObject", { transform: transformAmount });
+
+// module.exports = mongoose.model("Transaction", transactionSchema);
+
+
+
 const mongoose = require("mongoose");
 
 const transactionSchema = new mongoose.Schema(
   {
-    userId: { type: Number, required: true, index: true },
-    type: { type: String, required: true, index: true },
-    source: { type: String, default: null },
-    amount: { type: mongoose.Schema.Types.Decimal128, required: true },
-    grossAmount: { type: mongoose.Schema.Types.Decimal128, default: 0 },
-    fromUserId: { type: Number, default: null, index: true },
-    toUserId: { type: Number, default: null, index: true },
-    package: { type: Number, default: null },
-    plan: { type: String, default: "Global Auto-Pool" },
-    level: { type: Number, default: null },
-    description: { type: String, default: "" },
-    txHash: { type: String, default: null },
-    adminNote: { type: String, default: null },
-    status: { type: String, default: "completed", index: true },
-    date: { type: Date, default: Date.now, index: true },
-    fromAddress: { type: String },
-    toAddress: { type: String },
-    reversed: { type: Boolean, default: false },
-    reversedAt: { type: Date, default: null },
-    reversalReason: { type: String, default: "" },
+    userId: {
+      type: Number,
+      required: true,
+      index: true,
+    },
+
+    type: {
+      type: String,
+      required: true,
+      index: true,
+    },
+
+    source: {
+      type: String,
+      default: null,
+    },
+
+    amount: {
+      type: mongoose.Schema.Types.Decimal128,
+      required: true,
+    },
+
+    grossAmount: {
+      type: mongoose.Schema.Types.Decimal128,
+      default: 0,
+    },
+
+    fee: {
+      type: mongoose.Schema.Types.Decimal128,
+      default: 0,
+    },
+
+    netAmount: {
+      type: mongoose.Schema.Types.Decimal128,
+      default: 0,
+    },
+
+    walletBalance: {
+      type: mongoose.Schema.Types.Decimal128,
+      default: 0,
+    },
+
+    fromUserId: {
+      type: Number,
+      default: null,
+      index: true,
+    },
+
+    toUserId: {
+      type: Number,
+      default: null,
+      index: true,
+    },
+
+    package: {
+      type: Number,
+      default: null,
+    },
+
+    subscriptionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PackageSubscription",
+      default: null,
+      index: true,
+    },
+
+    stageNumber: {
+      type: Number,
+      default: null,
+    },
+
+    idempotencyKey: {
+      type: String,
+      default: null,
+    },
+
+    plan: {
+      type: String,
+      default: "Global Auto-Pool",
+    },
+
+    level: {
+      type: Number,
+      default: null,
+    },
+
+    description: {
+      type: String,
+      default: "",
+    },
+
+    txHash: {
+      type: String,
+      default: null,
+    },
+
+    adminNote: {
+      type: String,
+      default: null,
+    },
+
+    status: {
+      type: String,
+      default: "completed",
+      index: true,
+    },
+
+    date: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+
+    fromAddress: {
+      type: String,
+    },
+
+    toAddress: {
+      type: String,
+    },
+
+    reversed: {
+      type: Boolean,
+      default: false,
+    },
+
+    reversedAt: {
+      type: Date,
+      default: null,
+    },
+
+    reversalReason: {
+      type: String,
+      default: "",
+    },
+
     relatedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Transaction",
       default: null,
     },
   },
-  { 
+  {
     timestamps: true,
-    toJSON: { getters: true, virtuals: true },
-    toObject: { getters: true, virtuals: true }
+    toJSON: {
+      getters: true,
+      virtuals: true,
+    },
+    toObject: {
+      getters: true,
+      virtuals: true,
+    },
   }
 );
 
-// Puraane Indexes
-transactionSchema.index({ userId: 1, date: -1 });
+// Existing indexes
+transactionSchema.index({
+  userId: 1,
+  date: -1,
+});
 
-// 🔥 NAYE SUPER-FAST INDEXES (Ye loading time ko 15 sec se 1-2 sec kar denge)
-transactionSchema.index({ createdAt: -1 }); 
-transactionSchema.index({ type: 1, createdAt: -1 }); // Ye aapke Deposit page ke liye hai
+transactionSchema.index({
+  createdAt: -1,
+});
 
+transactionSchema.index({
+  type: 1,
+  createdAt: -1,
+});
+
+// Package stage withdrawal lookup
+transactionSchema.index({
+  userId: 1,
+  source: 1,
+  subscriptionId: 1,
+  stageNumber: 1,
+  status: 1,
+});
+
+// Idempotency protection
+transactionSchema.index(
+  { idempotencyKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      idempotencyKey: { $type: "string" },
+    },
+  }
+);
+
+// Convert Decimal128 values into normal numbers in API responses
 const transformAmount = (doc, ret) => {
-  if (ret.amount) ret.amount = parseFloat(ret.amount.toString()) || 0;
-  if (ret.grossAmount) ret.grossAmount = parseFloat(ret.grossAmount.toString()) || 0;
+  const decimalFields = [
+    "amount",
+    "grossAmount",
+    "fee",
+    "netAmount",
+    "walletBalance",
+  ];
+
+  for (const field of decimalFields) {
+    if (ret[field] !== undefined && ret[field] !== null) {
+      ret[field] = Number(ret[field].toString()) || 0;
+    }
+  }
+
   return ret;
 };
 
-transactionSchema.set("toJSON", { transform: transformAmount });
-transactionSchema.set("toObject", { transform: transformAmount });
+transactionSchema.set("toJSON", {
+  transform: transformAmount,
+});
 
-module.exports = mongoose.model("Transaction", transactionSchema);
+transactionSchema.set("toObject", {
+  transform: transformAmount,
+});
+
+module.exports = mongoose.model(
+  "Transaction",
+  transactionSchema
+);

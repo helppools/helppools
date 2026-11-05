@@ -422,7 +422,7 @@ const SuccessModal = ({
         return (
           <SuccessLayout title="Staking Done" icon={ShieldCheck}>
             <DetailCard>
-              <UserInfoBlock idLabel="Target ID" />
+              <UserInfoBlock idLabel="User ID" />
               <AmountBlock
                 label="Staked Amount"
                 value={amount}
@@ -510,7 +510,7 @@ const SuccessModal = ({
         return (
           <SuccessLayout title=" Activated" icon={Zap}>
             <DetailCard>
-              <UserInfoBlock idLabel="Target ID" />
+              <UserInfoBlock idLabel="User ID" />
               <AmountBlock
                 label="Activation Value"
                 value={amount}

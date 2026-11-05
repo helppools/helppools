@@ -1,209 +1,539 @@
 const mongoose = require('mongoose');
 
-const userSchema = new mongoose.Schema({
-  // ==========================================
-  // 🔹 IDENTITY
-  // ==========================================
-  userId: { type: Number, unique: true, required: true },
-  name: { type: String, required: true },
-  mobile: { type: String, required: true },
-  email: { type: String, required: true },
-  country: { type: String, required: true },
-
-  // ==========================================
-  // 🔹 AUTHENTICATION
-  // ==========================================
-  password: { type: String, required: true },
-  transactionPassword: { type: String, required: true },
-  resetToken: { type: String, default: null },
-  resetTokenExpiry: { type: Date, default: null },
-
-  // ==========================================
-  // 🔹 REFERRAL & GLOBAL TEAM (NAYE PLAN KE LIYE)
-  // ==========================================
-  sponsorId: { type: Number, default: null },
-  isSponsorDeactivated: { type: Boolean, default: false }, 
-  directCount: { type: Number, default: 0 },       // Kitne direct lagaye hain
-  globalTeamCount: { type: Number, default: 0 },   // Global downline kitni hai
-
-  // 🔥 NAYA: DAILY CAPPING TRACKER (Ab limit yahan save hogi)
-  todayGlobalTeamAdded: { type: Number, default: 0 },
-  lastGlobalTeamAddDate: { type: String, default: "" }, // Format: YYYY-MM-DD
-
-  // ==========================================
-  // 🔹 SECURITY & TRACKING
-  // ==========================================
-  deviceId: { type: String, default: null },
-  telegramId: { type: String, default: null },
-  isTelegramJoined: { type: Boolean, default: false },
-  ipAddress: { type: String }, 
-  depositAddress: { type: String, unique: true, sparse: true },
-
-  // ==========================================
-  // 🔹 WALLET & TOP-UP (MAIN BALANCES)
-  // ==========================================
-
-  usdtBep20Balance: { type: Number, default: 0 }, // 🔥 NAYA: USDT BEP20 Deposit Wallet (Deposit fund isi mein aayega)
-  walletBalance: { type: Number, default: 0 }, // Main Top-up Wallet (Deposits & 50% split returns)
-  isToppedUp: { type: Boolean, default: false },
-  topUpAmount: { type: Number, default: 0 },
-  topUpDate: { type: Date },
-
-  // 📜 Top-up history 
-  topUps: [
-    {
-      plan: { type: String, default: "Global Auto-Pool" },
-      amount: { type: Number, required: true },
-      date: { type: Date, default: Date.now }
-    }
-  ],
-
-  // ✅ PACKAGE SYSTEM (Agar alag se buy karte hain)
-  packages: [
-    {
-      plan: { type: String, default: "Global Auto-Pool" },
-      amount: { type: Number, required: true },
-      startDate: { type: Date, default: Date.now },
-      withdrawn: { type: Number, default: 0 } 
-    }
-  ],
-
-  purchasedPackages: { type: [Number], default: [] },
-  boosterRewardPaid: { type: Boolean, default: false },
-
-  // ==========================================
-  // 💰 ALL 5 INCOMES TRACKING (WITHDRAWABLE WALLETS) 🔥 4 se 5 kar diya
-  // ==========================================
-  directIncome: { type: Number, default: 0 },
-  totalDirectIncome: { type: Number, default: 0 }, 
-  
-  levelIncome: { type: Number, default: 0 },
-  totalLevelIncome: { type: Number, default: 0 },
-  
-  // 🔥 DAILY ROI WALLET: Auto-pool se jo daily aayega wo sidha isme jhudega
-  poolIncome: { type: Number, default: 0 },       
-  totalPoolIncome: { type: Number, default: 0 },  
-  
-  rewardIncome: { type: Number, default: 0 },     
-  totalRewardIncome: { type: Number, default: 0 },
-  
-  // ⚡ NAYA: FAST TRACK INCOME TRACKER ADD KIYA
-  fastTrackIncome: { type: Number, default: 0 },
-  totalFastTrackIncome: { type: Number, default: 0 },
-
-  // 🏆 NEW: Team Reward Claim Tracker (Target paisa dobara na mile)
-  claimedRewards: { type: [Number], default: [] }, 
-
-  // ==========================================
-  // 🚀 ACTIVE POOLS TRACKER (DAILY CRON JOB KE LIYE)
-  // ==========================================
-  activePools: [{
-      level: Number,
-      dailyAmount: Number,
-      totalDays: Number,
-      daysPaid: { type: Number, default: 0 },
-      lastPaidDate: { type: String, default: "" }, // Format: YYYY-MM-DD
-      status: { type: String, default: "ACTIVE" },  // "ACTIVE" or "COMPLETED"
-      withdrawnAmount: { type: Number, default: 0 } // 🔥 YAHI WO LINE HAI JO MISSING THI
-  }],
-
-  // ==========================================
-  // 🔹 WITHDRAWAL TRACKING
-  // ==========================================
-  pendingWithdrawals: { type: Number, default: 0 }, // Kitna total pending hai
-  totalWithdrawn: { type: Number, default: 0 },     // Total successful withdrawn
-  
-  // ==========================================
-  // 🔐 WALLET SECURITY
-  // ==========================================
-  walletAddress: { type: String, default: '' },
-  walletAddressChangeCount: { type: Number, default: 0 },
-  walletAddressChangeWindowStart: { type: Date, default: null },
-  // models/User.js ke andar dhundhiye aur ye add kijiye:
-// 1. Root level par ek naya field (Naye address ka time track karne ke liye)
-  walletAddressUpdatedAt: { type: Date },
-
-// 2. Aapka purana history wala array (Isme bas 'addedAt' add kiya hai)
-  walletAddressHistory: [
+const userSchema = new mongoose.Schema(
   {
-    address: { type: String },
-    addedAt: { type: Date }, // 🔥 BAS YE EK NAYI LINE ADD KARNI HAI
-    changedAt: { type: Date, default: Date.now },
-    updatedBy: { type: String, default: "User" } 
+    // ==========================================
+    // IDENTITY
+    // ==========================================
+    userId: {
+      type: Number,
+      unique: true,
+      required: true,
+      index: true
+    },
+
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+
+    mobile: {
+      type: String,
+      required: true,
+      trim: true
+    },
+
+    email: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true
+    },
+
+    country: {
+      type: String,
+      required: true,
+      trim: true
+    },
+
+    // ==========================================
+    // AUTHENTICATION
+    // ==========================================
+    password: {
+      type: String,
+      required: true
+    },
+
+    transactionPassword: {
+      type: String,
+      required: true
+    },
+
+    resetToken: {
+      type: String,
+      default: null
+    },
+
+    resetTokenExpiry: {
+      type: Date,
+      default: null
+    },
+
+    // ==========================================
+    // REFERRAL & TEAM
+    // ==========================================
+    sponsorId: {
+      type: Number,
+      default: null,
+     },
+
+    isSponsorDeactivated: {
+      type: Boolean,
+      default: false
+    },
+
+    directCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    globalTeamCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    todayGlobalTeamAdded: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    lastGlobalTeamAddDate: {
+      type: String,
+      default: ''
+    },
+
+    // ==========================================
+    // SECURITY & DEVICE
+    // ==========================================
+    deviceId: {
+      type: String,
+      default: null
+    },
+
+    telegramId: {
+      type: String,
+      default: null
+    },
+
+    isTelegramJoined: {
+      type: Boolean,
+      default: false
+    },
+
+    ipAddress: {
+      type: String,
+      default: null
+    },
+
+    depositAddress: {
+      type: String,
+      unique: true,
+      sparse: true,
+      default: undefined
+    },
+
+    // ==========================================
+    // WALLETS
+    // ==========================================
+    usdtBep20Balance: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    isToppedUp: {
+      type: Boolean,
+      default: false
+    },
+
+    topUpAmount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    topUpDate: {
+      type: Date,
+      default: null
+    },
+
+    // ==========================================
+    // OLD TOP-UP HISTORY
+    // Kept for existing compatibility
+    // ==========================================
+    topUps: [
+      {
+        plan: {
+          type: String,
+          default: 'Package'
+        },
+
+        amount: {
+          type: Number,
+          required: true,
+          min: 0
+        },
+
+        date: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ],
+
+    // ==========================================
+    // OLD PACKAGE SUMMARY
+    // New purchase records use PackageSubscription
+    // ==========================================
+    packages: [
+      {
+        plan: {
+          type: String,
+          default: 'Package'
+        },
+
+        amount: {
+          type: Number,
+          required: true,
+          min: 0
+        },
+
+        startDate: {
+          type: Date,
+          default: Date.now
+        },
+
+        withdrawn: {
+          type: Number,
+          default: 0,
+          min: 0
+        }
+      }
+    ],
+
+    purchasedPackages: {
+      type: [Number],
+      default: []
+    },
+
+    // ==========================================
+    // EXISTING INCOME SUMMARY FIELDS
+    // No automatic commission calculation here
+    // ==========================================
+    directIncome: {
+      type: Number,
+      default: 0
+    },
+
+    totalDirectIncome: {
+      type: Number,
+      default: 0
+    },
+
+    levelIncome: {
+      type: Number,
+      default: 0
+    },
+
+    totalLevelIncome: {
+      type: Number,
+      default: 0
+    },
+
+    poolIncome: {
+      type: Number,
+      default: 0
+    },
+
+    totalPoolIncome: {
+      type: Number,
+      default: 0
+    },
+
+        planIncome: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    totalPlanIncome: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    creditedPackageStages: {
+  type: [String],
+  default: []
+},
+
+    rewardIncome: {
+      type: Number,
+      default: 0
+    },
+
+    totalRewardIncome: {
+      type: Number,
+      default: 0
+    },
+
+    fastTrackIncome: {
+      type: Number,
+      default: 0
+    },
+
+    totalFastTrackIncome: {
+      type: Number,
+      default: 0
+    },
+
+    claimedRewards: {
+      type: [Number],
+      default: []
+    },
+
+    boosterRewardPaid: {
+      type: Boolean,
+      default: false
+    },
+
+    // ==========================================
+    // SINGLE POOL TRACKER
+    // ==========================================
+    poolCycles: [
+      {
+        packageId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'PackageSubscription',
+          required: true
+        },
+
+        packageAmount: {
+          type: Number,
+          required: true,
+          min: 0
+        },
+
+        cycleNumber: {
+          type: Number,
+          default: 1,
+          min: 1
+        },
+
+        currentLevel: {
+          type: Number,
+          default: 1,
+          min: 1,
+          max: 20
+        },
+
+        status: {
+          type: String,
+          enum: [
+            'PENDING',
+            'ACTIVE',
+            'PAUSED',
+            'COMPLETED'
+          ],
+          default: 'PENDING'
+        },
+
+        startedAt: {
+          type: Date,
+          default: null
+        },
+
+        endsAt: {
+          type: Date,
+          default: null
+        },
+
+        completedAt: {
+          type: Date,
+          default: null
+        }
+      }
+    ],
+
+
+    
+packageProgressVersion: {
+  type: Number,
+  default: 2
+},
+
+    // ==========================================
+    // WITHDRAWAL TRACKING
+    // ==========================================
+    pendingWithdrawals: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    totalWithdrawn: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    // ==========================================
+    // WALLET ADDRESS SECURITY
+    // ==========================================
+    walletAddress: {
+      type: String,
+      default: ''
+    },
+
+    walletAddressChangeCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    walletAddressChangeWindowStart: {
+      type: Date,
+      default: null
+    },
+
+    walletAddressUpdatedAt: {
+      type: Date,
+      default: null
+    },
+
+    walletAddressHistory: [
+      {
+        address: {
+          type: String,
+          default: ''
+        },
+
+        addedAt: {
+          type: Date,
+          default: null
+        },
+
+        changedAt: {
+          type: Date,
+          default: Date.now
+        },
+
+        updatedBy: {
+          type: String,
+          default: 'User'
+        }
+      }
+    ],
+
+    // ==========================================
+    // OTP & PASSWORD RESET
+    // ==========================================
+    otpRequestCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    lastOtpRequestDate: {
+      type: Date,
+      default: null
+    },
+
+    passwordResetCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    lastPasswordResetDate: {
+      type: Date,
+      default: null
+    },
+
+    // ==========================================
+    // SALARY TRACKING
+    // ==========================================
+    firstStakeDate: {
+      type: Date,
+      default: null
+    },
+
+    salaryLevel: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 4
+    },
+
+    salaryMonthsPaid: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 24
+    },
+
+    monthlySalaryWallet: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    totalSalaryEarned: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    // ==========================================
+    // PROFILE EDIT SECURITY
+    // ==========================================
+    editProfileOtp: {
+      type: String,
+      default: null
+    },
+
+    editProfileOtpExpiry: {
+      type: Date,
+      default: null
+    },
+
+    profileEditAccessExpiry: {
+      type: Date,
+      default: null
+    },
+
+    // ==========================================
+    // ROLE & STATUS
+    // ==========================================
+    role: {
+      type: String,
+      enum: [
+        'user',
+        'admin',
+        'promo',
+        'leader',
+        'superleader'
+      ],
+      default: 'user'
+    },
+
+    isBlocked: {
+      type: Boolean,
+      default: false
+    }
+  },
+  {
+    timestamps: true
   }
-  ],
-  
+);
 
-// User Schema mein yeh do lines add karein:
-otpRequestCount: { type: Number, default: 0 },
-lastOtpRequestDate: { type: Date },
-
-// User Schema ke andar add karein:
-passwordResetCount: { type: Number, default: 0 },
-lastPasswordResetDate: { type: Date },
-
- 
-// Salary Trackers
-firstStakeDate: { type: Date }, // Time limit calculate karne ke liye
-salaryLevel: { type: Number, default: 0 }, // 0: None, 1: Starter, 2: Builder, 3: Leader, 4: Champion
-salaryMonthsPaid: { type: Number, default: 0 }, // Kitne mahine mil chuki (Max 24)
-
-monthlySalaryWallet: { type: Number, default: 0 }, // Jisme salary aayegi aur yahan se withdraw hogi
-totalSalaryEarned: { type: Number, default: 0 }, // Abhi tak tot
-
-// models/User.js ke andar CCT section:
-cctBalance: { type: Number, default: 0 },
-cctStakingIncome: { type: Number, default: 0 },
-cctStakingDirectIncome: { type: Number, default: 0 }, // 🔥 NAYA: Direct Income Wallet
-cctStakingLevelIncome: { type: Number, default: 0 },  // 🔥 NAYA: Level Income Wallet
-totalCctStaked: { type: Number, default: 0 },
-stakedMaxCap: { type: Number, default: 0 },
-stakedEarned: { type: Number, default: 0 },
-isStaked: { type: Boolean, default: false },
-
-
-
-
-
-
-// Add these in your User.js schema
-compoundStakes: { type: Array, default: [] }, // Naye 40-day stakes yahan save honge
-totalCompoundStaked: { type: Number, default: 0 },
-cctCompoundIncome: { type: Number, default: 0 }, // Daily ROI wallet
-cctCompoundDirectIncome: { type: Number, default: 0 },
-cctCompoundLevelIncome: { type: Number, default: 0 },
-
-
-// models/User.js ke andar
-activeStakes: [{
-    amount: { type: Number, default: 0 },
-    maxCap: { type: Number, default: 0 },
-    earned: { type: Number, default: 0 },
-    dailyRate: { type: Number, default: 1.0 },
-    createdAt: { type: Date, default: Date.now },
-    status: { type: String, default: 'active' }
-}],
-stakingDailyRate: { type: Number, default: 1.0 }, // Old users backup ke liye
-
-  // 🔥 Ye lines User schema mein hona zaroori hain
-  editProfileOtp: { type: String },
-  editProfileOtpExpiry: { type: Date },
-  profileEditAccessExpiry: { type: Date },
-  
-
-  // ==========================================
-  // 🔹 ROLE & STATUS
-  // ==========================================
-role: { type: String, enum: ['user', 'admin', 'promo', 'leader', 'superleader'], default: 'user' },
-isBlocked: { type: Boolean, default: false },
-
-}, { timestamps: true });
-
-// 🚀 Indexes for fast performance
+// ==========================================
+// INDEXES
+// ==========================================
 userSchema.index({ sponsorId: 1 });
-userSchema.index({ ipAddress: 1 }); 
-userSchema.index({ deviceId: 1 });  
-userSchema.index({ createdAt: -1 }); 
-userSchema.index({ "activePools.status": 1 }); // Cron job daily queries ko superfast banayega
+userSchema.index({ ipAddress: 1 });
+userSchema.index({ deviceId: 1 });
+userSchema.index({ createdAt: -1 });
+userSchema.index({ 'poolCycles.status': 1 });
 
 module.exports = mongoose.model('User', userSchema);
