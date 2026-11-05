@@ -2143,171 +2143,303 @@ router.get("/topup-history/:userId", async (req, res) => {
 // });
 
 
+// router.get("/:userId", authMiddleware, async (req, res) => {
+//   try {
+//     const userId = Number(req.params.userId);
+//     const loggedInUserId = Number(req.user.userId); 
+
+//     // 🔥 SECURITY LOCK
+//     if (req.user.role !== 'admin' && userId !== loggedInUserId) {
+//       return res.status(403).json({ success: false, message: "Unauthorized access: You can only view your own profile." });
+//     }
+    
+//     // 1. User validation 
+//     const user = await User.findOne({ userId }).select('-password -txnPassword -__v');
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: "User not found" });
+//     }
+
+//     // 🔥 FIX FOR OLD DATA: Reward Income update
+//     if (!user.totalRewardIncome && user.rewardIncome > 0) {
+//         user.totalRewardIncome = user.rewardIncome;
+//         await user.save(); 
+//     }
+
+//     // 2. Lifetime incomes nikalna 
+//     const life = await getLifetimeIncomes(userId);
+
+//     // 3. Current Plan Income calculation
+//     const planKeys = ["plan1", "plan2", "plan3", "plan4", "plan5", "plan6"];
+//     let currentTotalPlanIncome = 0;
+
+//     planKeys.forEach(key => {
+//       currentTotalPlanIncome += calculatePackageEarnings(user.packages, key);
+//     });
+
+//     // =========================================================
+//     // 🔥 NAYA: ACTIVE DOWNLINE TEAM & LEVEL TARGET CALCULATION
+//     // =========================================================
+//     const allUsersForTeam = await User.find({}, 'userId sponsorId isToppedUp').lean();
+//     const directMap = new Map();
+    
+//     for (let u of allUsersForTeam) {
+//         if (u.sponsorId) {
+//             if (!directMap.has(u.sponsorId)) directMap.set(u.sponsorId, []);
+//             directMap.get(u.sponsorId).push(u);
+//         }
+//     }
+    
+//     // ✅ ADMIN WALE LEVEL TARGETS YAHAN ADD KIYE
+//     const levelTargets = {
+//         1: { required: 1, maxIncome: 10 },
+//         2: { required: 2, maxIncome: 20 },
+//         3: { required: 4, maxIncome: 40 },
+//         4: { required: 8, maxIncome: 80 },
+//         5: { required: 15, maxIncome: 150 },
+//         6: { required: 20, maxIncome: 200 },
+//         7: { required: 50, maxIncome: 500 },
+//         8: { required: 70, maxIncome: 700 },
+//         9: { required: 100, maxIncome: 1000 },
+//         10: { required: 150, maxIncome: 1500 },
+//         11: { required: 300, maxIncome: 3000 },
+//         12: { required: 500, maxIncome: 5000 }
+//     };
+
+//     let currentLevelUsers = directMap.get(user.userId) || [];
+//     let levelActiveCounts = {}; 
+//     let levelDetails = []; // Frontend ko detail dene ke liye
+//     let totalEligibleLevels = 0;
+//     let totalIncomeCap = 0;
+//     let totalPaidTeam = 0; 
+    
+//     for (let depth = 1; depth <= 12; depth++) {
+//         let activeCount = 0;
+//         let nextLevelUsers = [];
+        
+//         for (let u of currentLevelUsers) {
+//             if (u.isToppedUp) {
+//                 activeCount++;
+//                 totalPaidTeam++; // Total team me add karo
+//             }
+//             const children = directMap.get(u.userId) || [];
+//             nextLevelUsers.push(...children);
+//         }
+        
+//         // Target check karo
+//         const target = levelTargets[depth];
+//         const isEligible = activeCount >= target.required;
+        
+//         if (isEligible) {
+//             totalEligibleLevels++;
+//             totalIncomeCap += target.maxIncome;
+//         }
+
+//         // Frontend ke liye report banao
+//         levelDetails.push({
+//             level: depth,
+//             actualActiveTeam: activeCount,
+//             requiredTeam: target.required,
+//             incomeCap: target.maxIncome,
+//             isEligible: isEligible
+//         });
+
+//         // Pura object
+//         levelActiveCounts[depth] = activeCount;
+//         currentLevelUsers = nextLevelUsers;
+//     }
+
+//     // Withdrawal ke logic ke hisaab se directs (Level 1) ko minus karna
+//     let paidDirects = levelActiveCounts[1] || 0; 
+//     let validTeamSize = Math.max(0, totalPaidTeam - paidDirects);
+
+//     // 🔥 VIP ID Ke Liye Custom Boost
+//     if (user.userId === "1054948" || user.userId === 1054948) { 
+//         validTeamSize += 10000; 
+//     }
+
+//     // 🔥 Mongoose document ko plain object me convert karke naya data attach kiya
+//     const userDataToSend = user.toObject();
+//     userDataToSend.levelActiveCounts = levelActiveCounts;
+//     userDataToSend.levelDetails = levelDetails; // Lvl 1-12 details
+//     userDataToSend.totalEligibleLevels = totalEligibleLevels; // Kitne level pass kiye
+//     userDataToSend.totalIncomeCap = totalIncomeCap; // Total kitna fund limit bana
+
+//      // 4. Final Response 
+//     res.json({
+//       success: true,
+//       user: userDataToSend, 
+//       walletBalance: user.walletBalance || 0,
+      
+//       // 🔥 YAHAN ACTIVE DOWNLINE COUNT BHEJ DIYA
+//       activeDownlineCount: validTeamSize,
+      
+//       // ✅ DASHBOARD LIFETIME TOTALS
+//       income: {
+//          totalDirectIncome: life.direct || user.totalDirectIncome || user.directIncome || 0,
+//          totalLevelIncome:  life.level  || user.totalLevelIncome || user.levelIncome || 0,
+//          totalRewardIncome: life.reward || user.totalRewardIncome || user.rewardIncome || 0,
+//          totalSpinIncome:   life.spin   || user.totalSpinIncome || user.spinIncome || 0,
+//          totalFastTrackIncome: user.totalFastTrackIncome || user.fastTrackIncome || 0,
+//          planIncome: currentTotalPlanIncome || 0,
+         
+//          // STAKING INCOMES
+       
+//       },
+
+//       // ✅ CURRENT WITHDRAWABLE BALANCES
+//       directIncome: user.directIncome || 0,
+//       levelIncome:  user.levelIncome || 0,
+//       spinIncome:   user.spinIncome || 0,
+//       rewardIncome: user.rewardIncome || 0, 
+//       fastTrackIncome: user.fastTrackIncome || 0, 
+
+//       totalLifetimeIncome: (
+//         (life.direct || 0) + 
+//         (life.level || 0) + 
+//         (currentTotalPlanIncome || 0) + 
+//         (life.spin || 0) + 
+//         (life.reward || 0) + 
+//         (user.totalFastTrackIncome || 0)
+//       )
+//     });
+
+//   } catch (err) {
+//     console.error("Fetch Wallet Error:", err);
+//     res.status(500).json({ success: false, message: "Server error while fetching wallet" });
+//   }
+// });
+
+
+
 router.get("/:userId", authMiddleware, async (req, res) => {
   try {
     const userId = Number(req.params.userId);
-    const loggedInUserId = Number(req.user.userId); 
+    const loggedInUserId = Number(req.user.userId);
 
-    // 🔥 SECURITY LOCK
-    if (req.user.role !== 'admin' && userId !== loggedInUserId) {
-      return res.status(403).json({ success: false, message: "Unauthorized access: You can only view your own profile." });
+    // 1. SECURITY LOCK
+    if (req.user.role !== "admin" && userId !== loggedInUserId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized access: You can only view your own profile."
+      });
     }
-    
-    // 1. User validation 
-    const user = await User.findOne({ userId }).select('-password -txnPassword -__v');
+
+    // 2. USER VALIDATION
+    const user = await User.findOne({ userId })
+      .select("-password -txnPassword -__v");
+
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
     }
 
-    // 🔥 FIX FOR OLD DATA: Reward Income update
+    // 3. OLD DATA: REWARD INCOME UPDATE
     if (!user.totalRewardIncome && user.rewardIncome > 0) {
-        user.totalRewardIncome = user.rewardIncome;
-        await user.save(); 
+      user.totalRewardIncome = user.rewardIncome;
+      await user.save();
     }
 
-    // 2. Lifetime incomes nikalna 
+    // 4. LIFETIME INCOMES
     const life = await getLifetimeIncomes(userId);
 
-    // 3. Current Plan Income calculation
-    const planKeys = ["plan1", "plan2", "plan3", "plan4", "plan5", "plan6"];
+    // 5. EXISTING PLAN CALCULATION
+    const planKeys = [
+      "plan1",
+      "plan2",
+      "plan3",
+      "plan4",
+      "plan5",
+      "plan6"
+    ];
+
     let currentTotalPlanIncome = 0;
 
     planKeys.forEach(key => {
-      currentTotalPlanIncome += calculatePackageEarnings(user.packages, key);
+      currentTotalPlanIncome += calculatePackageEarnings(
+        user.packages,
+        key
+      );
     });
 
-    // =========================================================
-    // 🔥 NAYA: ACTIVE DOWNLINE TEAM & LEVEL TARGET CALCULATION
-    // =========================================================
-    const allUsersForTeam = await User.find({}, 'userId sponsorId isToppedUp').lean();
-    const directMap = new Map();
-    
-    for (let u of allUsersForTeam) {
-        if (u.sponsorId) {
-            if (!directMap.has(u.sponsorId)) directMap.set(u.sponsorId, []);
-            directMap.get(u.sponsorId).push(u);
-        }
-    }
-    
-    // ✅ ADMIN WALE LEVEL TARGETS YAHAN ADD KIYE
-    const levelTargets = {
-        1: { required: 1, maxIncome: 10 },
-        2: { required: 2, maxIncome: 20 },
-        3: { required: 4, maxIncome: 40 },
-        4: { required: 8, maxIncome: 80 },
-        5: { required: 15, maxIncome: 150 },
-        6: { required: 20, maxIncome: 200 },
-        7: { required: 50, maxIncome: 500 },
-        8: { required: 70, maxIncome: 700 },
-        9: { required: 100, maxIncome: 1000 },
-        10: { required: 150, maxIncome: 1500 },
-        11: { required: 300, maxIncome: 3000 },
-        12: { required: 500, maxIncome: 5000 }
-    };
+    // 6. HELPING POOL / PACKAGE STAGE INCOME
+    // Actual credited package-stage income takes priority.
+    const helpingPoolIncome =
+      Number(life.plan) ||
+      Number(user.totalPlanIncome) ||
+      Number(user.planIncome) ||
+      Number(currentTotalPlanIncome) ||
+      0;
 
-    let currentLevelUsers = directMap.get(user.userId) || [];
-    let levelActiveCounts = {}; 
-    let levelDetails = []; // Frontend ko detail dene ke liye
-    let totalEligibleLevels = 0;
-    let totalIncomeCap = 0;
-    let totalPaidTeam = 0; 
-    
-    for (let depth = 1; depth <= 12; depth++) {
-        let activeCount = 0;
-        let nextLevelUsers = [];
-        
-        for (let u of currentLevelUsers) {
-            if (u.isToppedUp) {
-                activeCount++;
-                totalPaidTeam++; // Total team me add karo
-            }
-            const children = directMap.get(u.userId) || [];
-            nextLevelUsers.push(...children);
-        }
-        
-        // Target check karo
-        const target = levelTargets[depth];
-        const isEligible = activeCount >= target.required;
-        
-        if (isEligible) {
-            totalEligibleLevels++;
-            totalIncomeCap += target.maxIncome;
-        }
-
-        // Frontend ke liye report banao
-        levelDetails.push({
-            level: depth,
-            actualActiveTeam: activeCount,
-            requiredTeam: target.required,
-            incomeCap: target.maxIncome,
-            isEligible: isEligible
-        });
-
-        // Pura object
-        levelActiveCounts[depth] = activeCount;
-        currentLevelUsers = nextLevelUsers;
-    }
-
-    // Withdrawal ke logic ke hisaab se directs (Level 1) ko minus karna
-    let paidDirects = levelActiveCounts[1] || 0; 
-    let validTeamSize = Math.max(0, totalPaidTeam - paidDirects);
-
-    // 🔥 VIP ID Ke Liye Custom Boost
-    if (user.userId === "1054948" || user.userId === 1054948) { 
-        validTeamSize += 10000; 
-    }
-
-    // 🔥 Mongoose document ko plain object me convert karke naya data attach kiya
+    // 7. USER DATA
     const userDataToSend = user.toObject();
-    userDataToSend.levelActiveCounts = levelActiveCounts;
-    userDataToSend.levelDetails = levelDetails; // Lvl 1-12 details
-    userDataToSend.totalEligibleLevels = totalEligibleLevels; // Kitne level pass kiye
-    userDataToSend.totalIncomeCap = totalIncomeCap; // Total kitna fund limit bana
 
-     // 4. Final Response 
+    // 8. FINAL RESPONSE
     res.json({
       success: true,
-      user: userDataToSend, 
+
+      user: userDataToSend,
+
       walletBalance: user.walletBalance || 0,
-      
-      // 🔥 YAHAN ACTIVE DOWNLINE COUNT BHEJ DIYA
-      activeDownlineCount: validTeamSize,
-      
-      // ✅ DASHBOARD LIFETIME TOTALS
+
+      // DASHBOARD LIFETIME TOTALS
       income: {
-         totalDirectIncome: life.direct || user.totalDirectIncome || user.directIncome || 0,
-         totalLevelIncome:  life.level  || user.totalLevelIncome || user.levelIncome || 0,
-         totalRewardIncome: life.reward || user.totalRewardIncome || user.rewardIncome || 0,
-         totalSpinIncome:   life.spin   || user.totalSpinIncome || user.spinIncome || 0,
-         totalFastTrackIncome: user.totalFastTrackIncome || user.fastTrackIncome || 0,
-         planIncome: currentTotalPlanIncome || 0,
-         
-         // STAKING INCOMES
-         cctStakingIncome: user.cctStakingIncome || 0,
-         cctStakingDirectIncome: user.cctStakingDirectIncome || 0,
-         cctStakingLevelIncome: user.cctStakingLevelIncome || 0
+        totalDirectIncome:
+          life.direct ||
+          user.totalDirectIncome ||
+          user.directIncome ||
+          0,
+
+        totalRewardIncome:
+          life.reward ||
+          user.totalRewardIncome ||
+          user.rewardIncome ||
+          0,
+
+        totalSpinIncome:
+          life.spin ||
+          user.totalSpinIncome ||
+          user.spinIncome ||
+          0,
+
+        totalFastTrackIncome:
+          user.totalFastTrackIncome ||
+          user.fastTrackIncome ||
+          0,
+
+        // HELPING POOL INCOME
+        helpingPoolIncome: helpingPoolIncome,
+        totalPlanIncome: helpingPoolIncome,
+
+        // Existing plan field preserved
+        planIncome: currentTotalPlanIncome || 0
       },
 
-      // ✅ CURRENT WITHDRAWABLE BALANCES
+      // CURRENT WITHDRAWABLE BALANCES
       directIncome: user.directIncome || 0,
-      levelIncome:  user.levelIncome || 0,
-      spinIncome:   user.spinIncome || 0,
-      rewardIncome: user.rewardIncome || 0, 
-      fastTrackIncome: user.fastTrackIncome || 0, 
+      spinIncome: user.spinIncome || 0,
+      rewardIncome: user.rewardIncome || 0,
+      fastTrackIncome: user.fastTrackIncome || 0,
 
+      // TOTAL LIFETIME INCOME
       totalLifetimeIncome: (
-        (life.direct || 0) + 
-        (life.level || 0) + 
-        (currentTotalPlanIncome || 0) + 
-        (life.spin || 0) + 
-        (life.reward || 0) + 
-        (user.totalFastTrackIncome || 0)
+        (Number(life.direct) || Number(user.totalDirectIncome) || Number(user.directIncome) || 0) +
+        (Number(life.plan) || Number(user.totalPlanIncome) || Number(user.planIncome) || Number(currentTotalPlanIncome) || 0) +
+        (Number(life.spin) || Number(user.totalSpinIncome) || Number(user.spinIncome) || 0) +
+        (Number(life.reward) || Number(user.totalRewardIncome) || Number(user.rewardIncome) || 0) +
+        (Number(user.totalFastTrackIncome) || Number(user.fastTrackIncome) || 0)
       )
     });
 
   } catch (err) {
     console.error("Fetch Wallet Error:", err);
-    res.status(500).json({ success: false, message: "Server error while fetching wallet" });
+
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching wallet"
+    });
   }
 });
+
 module.exports = router;
