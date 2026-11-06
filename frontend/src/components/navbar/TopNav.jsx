@@ -616,7 +616,7 @@ const TopNav = ({ onHamburgerClick }) => {
             aria-label="Go to Helping Pools dashboard"
           >
             <img
-              src="/logo.jpg"
+               src="/logo1.jpg"
               alt="Helping Pools Logo"
               className="hp-brand-logo"
             />
