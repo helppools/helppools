@@ -73,7 +73,7 @@ const demoCounterSchema = new mongoose.Schema(
 
     intervalMinutes: {
       type: Number,
-      default: 4,
+      default: 7,
       min: 1
     },
 
