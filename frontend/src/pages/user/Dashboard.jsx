@@ -2278,6 +2278,7 @@ import {
 } from "lucide-react";
 
 import IncomeSummary from "../../components/dashboard/IncomeSummary";
+import TotalSystemUsers from "../../components/dashboard/TotalSystemUsers";
 import ReferralLink from "../../components/dashboard/ReferralLink";
 import DailyROIPlan from "../../components/dashboard/DailyROI";
 import SpinnerOverlay from "../../components/common/SpinnerOverlay";
@@ -2322,8 +2323,7 @@ const Dashboard = ({ setModalState }) => {
       try {
         const parsedData = JSON.parse(cachedData);
 
-        setTotalRealUsers(parsedData.totalRealUsers || 0);
-        setGlobalFakeCount(parsedData.globalFakeCount || 0);
+      
         setActiveDownlineCount(parsedData.activeDownlineCount || 0);
         setIncome(parsedData.income || income);
         setLatestGlobalUsers(parsedData.latestGlobalUsers || []);
@@ -2345,8 +2345,7 @@ const Dashboard = ({ setModalState }) => {
       ]);
 
       setUser(userRes.data.user);
-      setTotalRealUsers(userRes.data.totalRealUsers || 0);
-      setGlobalFakeCount(userRes.data.globalFakeCount || 0);
+   
       setActiveDownlineCount(incomeRes.data.activeDownlineCount || 0);
 
       const newIncome = {
@@ -2400,6 +2399,55 @@ const Dashboard = ({ setModalState }) => {
       setLoading(false);
     }
   };
+
+  
+// Fetch real and demo community statistics
+const fetchCommunityStats = async () => {
+  if (!token) return;
+
+  try {
+    const response = await api.get("/community/stats", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (response.data?.success) {
+      const stats = response.data.data;
+
+      setTotalRealUsers(
+        Number(stats.totalRealUsers) || 0
+      );
+
+      setGlobalFakeCount(
+        Number(stats.demoUsers) || 0
+      );
+
+      setActiveDownlineCount(
+        Number(stats.activeDownline) || 0
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Community statistics error:",
+      error.response?.data || error.message
+    );
+  }
+};
+
+// Initial load and refresh every 60 seconds
+useEffect(() => {
+  if (!token || !user?.userId) return;
+
+  fetchCommunityStats();
+
+const interval = setInterval(() => {
+  fetchCommunityStats();
+}, 30000);
+
+  return () => clearInterval(interval);
+}, [token, user?.userId]);
+
 
   useEffect(() => {
     if (user?.userId) {
@@ -3129,59 +3177,92 @@ const Dashboard = ({ setModalState }) => {
         {/* Welcome */}
      
 <section className="hp-hero">
-  {/* Welcome Box */}
-  <div className="hp-hero-content">
-    <div className="hp-welcome-tag">
-      <Sparkles size={13} />
-      MEMBER DASHBOARD
-    </div>
-
-    <h1>
-      Welcome Back, <span>{displayName}</span>
-    </h1>
-
-    <p>
-      Your wallet, earnings and community in one place.
-    </p>
-  </div>
-
   {/* Member Account Box */}
-  <div className="hp-member">
-    <div className="hp-avatar">
-      {String(displayName).charAt(0).toUpperCase()}
-    </div>
-
-<div
-  className="hp-member-info"
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '20px',
-    width: '100%',
-    flexWrap: 'wrap'
-  }}
->
-  <div style={{ minWidth: 0 }}>
-    <div className="hp-member-label">MEMBER ACCOUNT</div>
-    <div className="hp-member-name">{displayName}</div>
-  </div>
-
   <div
-    className="hp-member-id"
+    className="hp-member"
     style={{
-      whiteSpace: 'nowrap',
-      textAlign: 'right',
-      marginLeft: 'auto'
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+      padding: '20px',
+      borderRadius: '16px',
+      width: '100%',
+      boxSizing: 'border-box'
     }}
   >
-    ID: {user.userId}
-  </div>
-</div>
+    {/* Member Details */}
+    <div
+      className="hp-member-info"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '15px',
+        width: '100%',
+        minWidth: 0,
+        flexWrap: 'wrap'
+      }}
+    >
+      {/* User Name */}
+      <div style={{ minWidth: 0, flex: '1 1 150px' }}>
+        <div
+          className="hp-member-label"
+          style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            letterSpacing: '1.5px',
+            marginBottom: '7px',
+            opacity: 0.8
+          }}
+        >
+          MEMBER ACCOUNT
+        </div>
 
+        <div
+          className="hp-member-name"
+          style={{
+            fontSize: '22px',
+            fontWeight: 800,
+            lineHeight: 1.3,
+            overflowWrap: 'anywhere'
+          }}
+        >
+          {displayName}
+        </div>
+      </div>
+
+      {/* User ID */}
+      <div
+        className="hp-member-id"
+        style={{
+          flexShrink: 0,
+          whiteSpace: 'nowrap',
+          textAlign: 'right',
+          fontSize: '18px',
+          fontWeight: 900,
+          letterSpacing: '0.6px',
+          padding: '9px 13px',
+          borderRadius: '10px',
+          background: 'rgba(255,255,255,0.12)'
+        }}
+      >
+        ID: {user.userId}
+      </div>
+    </div>
   </div>
 </section>
 
+
+{/* COMMUNITY OVERVIEW */}
+<section className="hp-section">
+  <TotalSystemUsers
+    user={user}
+    totalRealUsersFromDB={totalRealUsers}
+    globalFakeCount={globalFakeCount}
+    demoUsersCount={globalFakeCount}
+    activeDownlineCount={activeDownlineCount}
+  />
+</section>
 
       
         {/* Income */}

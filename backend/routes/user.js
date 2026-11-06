@@ -1420,54 +1420,66 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
   let amount = 0;
 
   let isFreeFirstPackage = false;
+  let now = new Date();
 
-  const now = new Date();
+  const LEADER_MINIMUM_RESERVE = 30;
+  const packageSteps = [30, 60, 120, 240, 480, 960];
 
   try {
+    // ==========================================
+    // 1. VALIDATE TARGET USER AND PACKAGE
+    // ==========================================
+
     targetUserId = Number(req.params.userId);
     amount = Number(req.body.amount);
 
     const { transactionPassword } = req.body;
 
-    const packageSteps = [30, 60, 120, 240, 480, 960];
-
-    // VALIDATE TARGET USER ID
     if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
       return res.status(400).json({
+        success: false,
         message: "Invalid target user ID."
       });
     }
 
-    // VALIDATE PACKAGE
     if (!packageSteps.includes(amount)) {
       return res.status(400).json({
+        success: false,
         message: "Invalid package amount."
       });
     }
 
-    // FIND CURRENT USER
+    // ==========================================
+    // 2. FIND CURRENT LEADER
+    // ==========================================
+
     const currentUser = await User.findOne({
       userId: req.user.userId
     });
 
     if (!currentUser) {
       return res.status(404).json({
+        success: false,
         message: "Current user not found."
       });
     }
 
     currentUserId = currentUser.userId;
 
-    // ONLY LEADER ROLE ALLOWED
-    if (currentUser.role !== "leader") {
+    if (String(currentUser.role).toLowerCase() !== "leader") {
       return res.status(403).json({
+        success: false,
         message: "Only leaders can use this route."
       });
     }
 
-    // TRANSACTION PASSWORD VALIDATION
+    // ==========================================
+    // 3. TRANSACTION PASSWORD
+    // ==========================================
+
     if (!transactionPassword) {
       return res.status(400).json({
+        success: false,
         message: "Transaction password is required."
       });
     }
@@ -1478,41 +1490,84 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       String(currentUser.transactionPassword).toLowerCase()
     ) {
       return res.status(403).json({
+        success: false,
         message: "Invalid transaction password."
       });
     }
 
-    // FIND TARGET USER
+    // ==========================================
+    // 4. FIND TARGET USER
+    // ==========================================
+
     const targetUser = await User.findOne({
       userId: targetUserId
     });
 
     if (!targetUser) {
       return res.status(404).json({
+        success: false,
         message: "Target user not found."
       });
     }
 
     if (targetUser.isBlocked) {
       return res.status(403).json({
+        success: false,
         message: "This user account is blocked."
       });
     }
 
-    // ALLOW SELF OR OWN DIRECT REFERRAL ONLY
+    // ==========================================
+    // 5. SELF / DIRECT / ANY DOWNLINE CHECK
+    // ==========================================
+
     const isSelfActivation =
       Number(targetUser.userId) === Number(currentUserId);
 
     const isDirectReferral =
       Number(targetUser.sponsorId) === Number(currentUserId);
 
-    if (!isSelfActivation && !isDirectReferral) {
+    let isDownline = false;
+
+    if (isSelfActivation) {
+      isDownline = true;
+    } else {
+      // Check target user's complete upline chain.
+      // Leader must exist anywhere in target's upline.
+
+      let checkUplineId = targetUser.sponsorId;
+      let depth = 1;
+
+      while (checkUplineId && depth <= 50) {
+        if (Number(checkUplineId) === Number(currentUserId)) {
+          isDownline = true;
+          break;
+        }
+
+        const nextNode = await User.findOne({
+          userId: Number(checkUplineId)
+        }).select("sponsorId").lean();
+
+        if (!nextNode) {
+          break;
+        }
+
+        checkUplineId = nextNode.sponsorId;
+        depth++;
+      }
+    }
+
+    if (!isDownline) {
       return res.status(403).json({
-        message: "You can only activate yourself or your own direct referral."
+        success: false,
+        message: "You can only activate yourself or users from your own downline. Upline and crossline activation is not allowed."
       });
     }
 
-    // CHECK PREVIOUS PACKAGES
+    // ==========================================
+    // 6. CHECK PREVIOUS PACKAGES
+    // ==========================================
+
     const previousSubscriptions = await PackageSubscription.find({
       userId: targetUserId
     }).select("packageAmount").lean();
@@ -1539,7 +1594,10 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       ? Math.max(...previousAmounts)
       : 0;
 
-    // STRICT PACKAGE SEQUENCE
+    // ==========================================
+    // 7. STRICT PACKAGE SEQUENCE
+    // ==========================================
+
     const currentIndex = packageSteps.indexOf(highestPackage);
 
     const nextPackage = highestPackage === 0
@@ -1548,19 +1606,32 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
 
     if (!nextPackage) {
       return res.status(400).json({
+        success: false,
         message: "This user has already completed all package levels."
       });
     }
 
     if (amount !== nextPackage) {
       return res.status(400).json({
+        success: false,
         message: `This user must purchase the $${nextPackage} package next. Follow the package sequence.`
       });
     }
 
-    // FIRST $30 PACKAGE IS FREE ONLY ONCE
+    // ==========================================
+    // 8. FREE FIRST $30 PACKAGE RULE
+    // ==========================================
+
+    // FREE only for:
+    // 1. Leader's own first $30 package.
+    // 2. Each direct referral's first $30 package.
+    //
+    // Level 2+ downline first $30 is PAID.
+
     isFreeFirstPackage =
-      amount === 30 && highestPackage === 0;
+      amount === 30 &&
+      highestPackage === 0 &&
+      (isSelfActivation || isDirectReferral);
 
     const purchaseType = highestPackage === 0
       ? "FIRST_PURCHASE"
@@ -1568,31 +1639,99 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
 
     const cycleNumber = 1;
 
-    // WALLET DEDUCTION
-    // FIRST $30 = FREE
-    // ALL OTHER PACKAGES = PAID
+    // ==========================================
+    // 9. LEADER WALLET RESERVE CHECK
+    // ==========================================
+
+    const latestLeader = await User.findOne({
+      userId: currentUserId
+    }).select("walletBalance").lean();
+
+    if (!latestLeader) {
+      return res.status(404).json({
+        success: false,
+        message: "Leader account not found."
+      });
+    }
+
+    const freshLeaderBalance = Number(
+      latestLeader.walletBalance || 0
+    );
+
+    const maximumSpendable = Math.max(
+      0,
+      freshLeaderBalance - LEADER_MINIMUM_RESERVE
+    );
+
+    // ==========================================
+    // 10. FREE OR PAID ACTIVATION
+    // ==========================================
 
     if (!isFreeFirstPackage) {
+
+      // Paid activation:
+      // Package amount + $30 reserve required.
+
+      const requiredWalletBalance =
+        amount + LEADER_MINIMUM_RESERVE;
+
+      if (freshLeaderBalance < requiredWalletBalance) {
+        return res.status(400).json({
+          success: false,
+
+          message:
+            `Insufficient wallet balance. Package cost: $${amount}. You must keep $30 in your wallet. Total required: $${requiredWalletBalance}.`,
+
+          walletBalance: freshLeaderBalance,
+          packageAmount: amount,
+          minimumReserve: LEADER_MINIMUM_RESERVE,
+          maximumSpendable
+        });
+      }
+
+      // ATOMIC WALLET DEDUCTION
       const debitResult = await User.updateOne(
         {
           userId: currentUserId,
-          walletBalance: { $gte: amount }
+          walletBalance: {
+            $gte: requiredWalletBalance
+          }
         },
         {
-          $inc: { walletBalance: -amount }
+          $inc: {
+            walletBalance: -amount
+          }
         }
       );
 
       if (debitResult.modifiedCount !== 1) {
+        const latestBalanceUser = await User.findOne({
+          userId: currentUserId
+        }).select("walletBalance").lean();
+
+        const latestBalance = Number(
+          latestBalanceUser?.walletBalance || 0
+        );
+
         return res.status(400).json({
-          message: `Insufficient wallet balance. Required: $${amount}.`
+          success: false,
+          message: "Wallet balance changed. Please refresh and try again.",
+          walletBalance: latestBalance,
+          minimumReserve: LEADER_MINIMUM_RESERVE,
+          maximumSpendable: Math.max(
+            0,
+            latestBalance - LEADER_MINIMUM_RESERVE
+          )
         });
       }
 
       walletDebited = true;
     }
 
-    // SAVE TARGET USER PACKAGE
+    // ==========================================
+    // 11. SAVE TARGET USER PACKAGE
+    // ==========================================
+
     const packageEntry = {
       plan: "Global Auto-Pool",
       amount,
@@ -1613,9 +1752,13 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
     targetUser.updatedAt = now;
 
     await targetUser.save();
+
     packageSaved = true;
 
-    // CREATE PACKAGE SUBSCRIPTION
+    // ==========================================
+    // 12. CREATE PACKAGE SUBSCRIPTION
+    // ==========================================
+
     const subscription = await PackageSubscription.create({
       userId: targetUserId,
       packageAmount: amount,
@@ -1626,6 +1769,7 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       activatedAt: now,
       accountingCapAmount: amount * 2,
       recordedActivityAmount: 0,
+
       timer: {
         durationSeconds: 0,
         startedAt: null,
@@ -1633,14 +1777,20 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
         pausedAt: null,
         totalPausedSeconds: 0
       },
+
       notes: isSelfActivation
         ? `Self package activated by leader ${currentUserId}`
-        : `Direct referral package activated by leader ${currentUserId}`
+        : isDirectReferral
+          ? `Direct referral package activated by leader ${currentUserId}`
+          : `Downline package activated by leader ${currentUserId}`
     });
 
     subscriptionId = subscription._id;
 
-    // CREATE TOP-UP TRANSACTION
+    // ==========================================
+    // 13. CREATE TOP-UP TRANSACTION
+    // ==========================================
+
     const transaction = await Transaction.create({
       userId: targetUserId,
       type: "topup",
@@ -1649,9 +1799,11 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       toUserId: targetUserId,
       package: amount,
       plan: "Global Auto-Pool",
+
       description: isFreeFirstPackage
         ? `Free first $30 package activated by leader ${currentUserId}`
         : `Leader package ${purchaseType}: $${amount}`,
+
       status: "completed",
       date: now
     });
@@ -1661,14 +1813,20 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
     subscription.transactionId = transaction._id;
     await subscription.save();
 
-    // CREDIT DIRECT 25% + LEVEL 2-20
+    // ==========================================
+    // 14. DISTRIBUTE PACKAGE COMMISSION
+    // ==========================================
+
     commissionCredits = await distributePackageCommission(
       targetUser,
       amount,
       subscription._id
     );
 
-    // SUCCESS
+    // ==========================================
+    // 15. SUCCESS
+    // ==========================================
+
     commissionCredits = [];
     walletDebited = false;
     packageSaved = false;
@@ -1679,18 +1837,24 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
       userId: currentUserId
     }).select("walletBalance").lean();
 
-    return res.json({
+    const finalWalletBalance = Number(
+      freshWallet?.walletBalance || 0
+    );
+
+    return res.status(200).json({
       success: true,
 
       message: isFreeFirstPackage
         ? "First $30 package activated successfully without wallet deduction."
-        : `Package of $${amount} activated successfully.`,
+        : `Package of $${amount} activated successfully. $30 minimum wallet reserve maintained.`,
 
       freePackage: isFreeFirstPackage,
 
       activationType: isSelfActivation
         ? "SELF"
-        : "DIRECT_REFERRAL",
+        : isDirectReferral
+          ? "DIRECT_REFERRAL"
+          : "DOWNLINE",
 
       package: {
         subscriptionId: subscription._id,
@@ -1701,12 +1865,24 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
         status: subscription.status
       },
 
-      walletBalance: Number(freshWallet?.walletBalance || 0),
+      walletBalance: finalWalletBalance,
+
+      minimumReserve: LEADER_MINIMUM_RESERVE,
+
+      maximumSpendable: Math.max(
+        0,
+        finalWalletBalance - LEADER_MINIMUM_RESERVE
+      ),
+
       transactionId: transaction._id
     });
 
   } catch (err) {
     console.error("Leader Top-up Error:", err);
+
+    // ==========================================
+    // 16. ROLLBACK
+    // ==========================================
 
     try {
       if (commissionCredits.length) {
@@ -1727,7 +1903,9 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
 
       if (packageSaved) {
         await User.updateOne(
-          { userId: targetUserId },
+          {
+            userId: targetUserId
+          },
           {
             $pull: {
               packages: {
@@ -1742,26 +1920,32 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
 
       if (walletDebited && currentUserId) {
         await User.updateOne(
-          { userId: currentUserId },
           {
-            $inc: { walletBalance: amount }
+            userId: currentUserId
+          },
+          {
+            $inc: {
+              walletBalance: amount
+            }
           }
         );
       }
 
     } catch (rollbackError) {
-      console.error("Leader top-up rollback error:", rollbackError);
+      console.error(
+        "Leader top-up rollback error:",
+        rollbackError
+      );
     }
 
     if (!res.headersSent) {
       return res.status(500).json({
+        success: false,
         message: "Leader top-up failed. Please check wallet and package records."
       });
     }
   }
 });
-
-
 
 // Backend Route: promo-dummy-topup
 // ✅ PROMO DUMMY TOPUP - FIXED & ROBUST

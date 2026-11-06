@@ -96,7 +96,7 @@ router.use('/package-progress', require('./packageProgress'));
 router.use('/support', require('./support'));
 router.use('/dashboard', require('./dashboard'));
 router.use('/community', require('./community'));
- 
+ router.use('/community', require('./communityRoutes'));
 // 🎥 User Promo Video Route
  
 // 🌐 Root test

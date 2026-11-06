@@ -9029,9 +9029,15 @@ import api from "../../api/axios";
 
 const packages = [30, 60, 120, 240, 480, 960];
 
+// const stageDurations = [
+//   1, 3, 7, 15,
+//   30, 30, 30, 30, 30, 30,
+//   30, 30, 30, 30
+// ];
+
 const stageDurations = [
-  1, 3, 7, 15,
-  30, 30, 30, 30, 30, 30,
+  0.6, 0.6, 0.6, 0.6, 0.6,
+  30, 30, 30, 30, 30,
   30, 30, 30, 30
 ];
 
@@ -9764,7 +9770,7 @@ export default function Plan() {
       `}</style>
 
       {/* Header */}
-      <div className="hp-plan-header">
+      {/* <div className="hp-plan-header">
         <div className="hp-plan-heading">
           <div className="hp-plan-heading-icon">
             <Package size={23} />
@@ -9782,7 +9788,7 @@ export default function Plan() {
           <Sparkles size={12} />
           LIVE STATUS
         </div>
-      </div>
+      </div> */}
 
       {/* Overall summary */}
       {/* <div className="hp-summary">
@@ -10285,15 +10291,7 @@ export default function Plan() {
         </>
       )}
 
-      <div className="hp-notice">
-        <AlertCircle size={15} />
-        <span>
-          Reference amounts are illustrative schedule figures only.
-          They are not actual received income, guaranteed returns,
-          or promises of payment. Actual transactions must be verified
-          separately in transaction history.
-        </span>
-      </div>
+      
 
       <div className="hp-plan-footer">
         HELPING POOLS • PACKAGE PROGRESS TRACKER...

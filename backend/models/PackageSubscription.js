@@ -513,9 +513,15 @@ const mongoose = require('mongoose');
 
 const PACKAGE_AMOUNTS = [30, 60, 120, 240, 480, 960];
 
+// const STAGE_DAYS = [
+//   1, 3, 7, 15,
+//   30, 30, 30, 30, 30, 30,
+//   30, 30, 30, 30
+// ];
+
 const STAGE_DAYS = [
-  1, 3, 7, 15,
-  30, 30, 30, 30, 30, 30,
+  0.6, 0.6, 0.6, 0.6, 0.6,
+  30, 30, 30, 30, 30,
   30, 30, 30, 30
 ];
 
@@ -527,11 +533,16 @@ const stageSchema = new mongoose.Schema({
     max: 14
   },
 
+  // durationDays: {
+  //   type: Number,
+  //   required: true,
+  //   min: 1
+  // },
   durationDays: {
-    type: Number,
-    required: true,
-    min: 1
-  },
+  type: Number,
+  required: true,
+  min: 0.01
+},
 
   status: {
     type: String,
