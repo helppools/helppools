@@ -2509,15 +2509,19 @@ const DEFAULT_STAGE_DAYS = [
 
 // Only the $30 package gets five 1-day stages.
 // All other packages keep the original schedule.
+ 
+
 function getStageDays(packageAmount) {
+  // Only $30 package: first 5 stages complete within 24 hours.
   if (Number(packageAmount) === 30) {
     return [
-      1, 1, 1, 1, 1,
+      0.2, 0.2, 0.2, 0.2, 0.2,
       30, 30, 30, 30, 30,
       30, 30, 30, 30
     ];
   }
 
+  // All other packages keep the original schedule.
   return [...DEFAULT_STAGE_DAYS];
 }
 

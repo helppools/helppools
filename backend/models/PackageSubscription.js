@@ -763,17 +763,29 @@ const DEFAULT_STAGE_DAYS = [
   30, 30, 30, 30
 ];
 
+// const getStageDays = (packageAmount) => {
+//   // Only $30 package gets five 1-day stages.
+//   if (Number(packageAmount) === 30) {
+//     return [
+//       1, 1, 1, 1, 1,
+//       30, 30, 30, 30, 30,
+//       30, 30, 30, 30
+//     ];
+//   }
+
+//   // All other packages keep the default schedule.
+//   return [...DEFAULT_STAGE_DAYS];
+// };
+
 const getStageDays = (packageAmount) => {
-  // Only $30 package gets five 1-day stages.
   if (Number(packageAmount) === 30) {
     return [
-      1, 1, 1, 1, 1,
+      0.2, 0.2, 0.2, 0.2, 0.2,
       30, 30, 30, 30, 30,
       30, 30, 30, 30
     ];
   }
 
-  // All other packages keep the default schedule.
   return [...DEFAULT_STAGE_DAYS];
 };
 
