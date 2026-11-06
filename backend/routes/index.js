@@ -97,6 +97,7 @@ router.use('/support', require('./support'));
 router.use('/dashboard', require('./dashboard'));
 router.use('/community', require('./community'));
  router.use('/community', require('./communityRoutes'));
+ router.use("/royalty", require("./royaltyRoutes"));
 // 🎥 User Promo Video Route
  
 // 🌐 Root test

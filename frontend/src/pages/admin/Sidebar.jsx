@@ -164,13 +164,10 @@ const Sidebar = () => {
             <NavLink to={`${BASE_PATH}/india-boost`} className={linkClass} onClick={(e) => handleNavClick(e, `${BASE_PATH}/india-boost`)}>
               <FaBolt className="inline-block mr-2 text-orange-500 animate-pulse" /> India Boost 🇮🇳
             </NavLink>
-
-            <NavLink to={`${BASE_PATH}/fast-track-report`} className={linkClass} onClick={(e) => handleNavClick(e, `${BASE_PATH}/fast-track-report`)}>
-              <FaRocket className="inline-block mr-2 text-orange-500" /> Fast Track Report
-            </NavLink>
+ 
 
             <NavLink to={`${BASE_PATH}/fast-track-progress`} className={linkClass} onClick={(e) => handleNavClick(e, `${BASE_PATH}/fast-track-progress`)}>
-              <Timer className="inline-block mr-2 text-indigo-500" size={16} style={{ verticalAlign: 'text-bottom' }} /> Fast Track Tracker
+              <Timer className="inline-block mr-2 text-indigo-500" size={16} style={{ verticalAlign: 'text-bottom' }} /> Royalty offer
             </NavLink>
             
             <NavLink to={`${BASE_PATH}/wallet-direct-stats`} className={linkClass} onClick={(e) => handleNavClick(e, `${BASE_PATH}/wallet-direct-stats`)}>

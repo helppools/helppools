@@ -2275,10 +2275,12 @@ import {
   ArrowUpRight,
   TrendingUp,
   Activity,
+  Crown,
 } from "lucide-react";
 
 import IncomeSummary from "../../components/dashboard/IncomeSummary";
 import TotalSystemUsers from "../../components/dashboard/TotalSystemUsers";
+import RoyaltyProgress from "../../components/dashboard/RoyaltyProgress";
 import ReferralLink from "../../components/dashboard/ReferralLink";
 import DailyROIPlan from "../../components/dashboard/DailyROI";
 import SpinnerOverlay from "../../components/common/SpinnerOverlay";
@@ -3280,6 +3282,21 @@ const interval = setInterval(() => {
             <IncomeSummary income={income} user={user} />
           </div>
         </section>
+
+        {/* ROYALTY OFFER */}
+{/* ROYALTY OFFER */}
+<section className="hp-section">
+  <div className="hp-section-heading">
+    <h2 className="hp-section-title">
+      <Crown size={17} />
+      Royalty Reward
+    </h2>
+
+    <span className="hp-section-sub">5-day offer</span>
+  </div>
+
+  <RoyaltyProgress user={user} token={token} />
+</section>
 
           {/* Referral */}
         <section className="hp-section">

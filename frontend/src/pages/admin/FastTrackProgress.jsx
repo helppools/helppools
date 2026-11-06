@@ -1,392 +1,621 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import api from '../../api/axios';
-import Swal from 'sweetalert2';
-import { Timer, ExternalLink, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-const FastTrackProgress = () => {
-    const [rawProgressData, setRawProgressData] = useState([]);
-    const [loading, setLoading] = useState(true);
+import React, { useEffect, useMemo, useState } from "react";
+import api from "../../api/axios";
+import {
+  Crown,
+  Users,
+  Gift,
+  Clock,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Search
+} from "lucide-react";
 
-    // 🔹 Filters & Pagination States
-    const [searchTerm, setSearchTerm] = useState("");
-    const [fromDate, setFromDate] = useState("");
-    const [toDate, setToDate] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [sortConfig, setSortConfig] = useState({ key: 'directs', direction: 'descending' });
+const RoyaltyProgress = () => {
+  const [rawData, setRawData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortConfig, setSortConfig] = useState({
+    key: "directCount",
+    direction: "descending"
+  });
+  const [now, setNow] = useState(Date.now());
 
-    useEffect(() => {
-        fetchProgress();
-    }, []);
+  const fetchProgress = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    const fetchProgress = async () => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('adminToken');
-            const res = await api.get('/admin/fast-track-progress', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.data.success) {
-                setRawProgressData(res.data.data || []);
-            }
-        } catch (error) {
-            console.error("Failed to fetch progress", error);
-        } finally {
-            setLoading(false);
+      const token = localStorage.getItem("adminToken");
+
+      const res = await api.get("/admin/royalty-progress", {
+        headers: {
+          Authorization: `Bearer ${token}`
         }
+      });
+
+      if (res.data?.success) {
+        setRawData(res.data.data || []);
+      } else {
+        setError(res.data?.message || "Unable to load Royalty data.");
+      }
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+        "Royalty progress API not available."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProgress();
+
+    const refresh = setInterval(fetchProgress, 60000);
+    return () => clearInterval(refresh);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, fromDate, toDate, statusFilter, itemsPerPage]);
+
+  const getTimeLeft = (date) => {
+    const deadline = new Date(date).getTime();
+    if (!Number.isFinite(deadline)) return "-";
+
+    const diff = deadline - now;
+    if (diff <= 0) return "Expired";
+
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  };
+
+  const getStatus = (user) => {
+    const status = String(user.status || "").toUpperCase();
+
+    if (status === "EXCLUDED" || user.role === "leader") {
+      return "Excluded";
+    }
+
+    if (status === "PAID") return "Paid";
+    if (status === "NO_REWARD") return "No Reward";
+    if (status === "PENDING") {
+      return new Date(user.expiresAt).getTime() <= now
+        ? "Processing"
+        : "Running";
+    }
+
+    if (user.processed) {
+      return Number(user.rewardAmount || 0) > 0 ? "Paid" : "No Reward";
+    }
+
+    return new Date(user.expiresAt).getTime() <= now
+      ? "Processing"
+      : "Running";
+  };
+
+  const getTierReward = (count) => {
+    if (count >= 15) return 150;
+    if (count >= 10) return 70;
+    if (count >= 5) return 30;
+    return 0;
+  };
+
+  const filteredData = useMemo(() => {
+    return rawData.filter((user) => {
+      const search = searchTerm.toLowerCase();
+
+      const matchesSearch =
+        String(user.userId || "").toLowerCase().includes(search) ||
+        String(user.name || "").toLowerCase().includes(search);
+
+      const activation = new Date(user.activationAt).getTime();
+
+      const from = fromDate
+        ? new Date(`${fromDate}T00:00:00`).getTime()
+        : null;
+
+      const to = toDate
+        ? new Date(`${toDate}T23:59:59`).getTime()
+        : null;
+
+      const matchesFrom = from === null || activation >= from;
+      const matchesTo = to === null || activation <= to;
+
+      const status = getStatus(user);
+      const matchesStatus =
+        statusFilter === "ALL" || status === statusFilter;
+
+      return (
+        matchesSearch &&
+        matchesFrom &&
+        matchesTo &&
+        matchesStatus
+      );
+    });
+  }, [rawData, searchTerm, fromDate, toDate, statusFilter, now]);
+
+  const sortedData = useMemo(() => {
+    return [...filteredData].sort((a, b) => {
+      let valueA;
+      let valueB;
+
+      if (sortConfig.key === "activationAt" || sortConfig.key === "expiresAt") {
+        valueA = new Date(a[sortConfig.key]).getTime() || 0;
+        valueB = new Date(b[sortConfig.key]).getTime() || 0;
+      } else if (
+        sortConfig.key === "userId" ||
+        sortConfig.key === "directCount" ||
+        sortConfig.key === "rewardAmount"
+      ) {
+        valueA = Number(a[sortConfig.key]) || 0;
+        valueB = Number(b[sortConfig.key]) || 0;
+      } else {
+        valueA = String(a[sortConfig.key] || "").toLowerCase();
+        valueB = String(b[sortConfig.key] || "").toLowerCase();
+      }
+
+      if (valueA < valueB) {
+        return sortConfig.direction === "ascending" ? -1 : 1;
+      }
+
+      if (valueA > valueB) {
+        return sortConfig.direction === "ascending" ? 1 : -1;
+      }
+
+      return 0;
+    });
+  }, [filteredData, sortConfig]);
+
+  const requestSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction:
+        prev.key === key && prev.direction === "ascending"
+          ? "descending"
+          : "ascending"
+    }));
+  };
+
+  const sortIcon = (key) => {
+    if (sortConfig.key !== key) return " ↕";
+    return sortConfig.direction === "ascending" ? " ↑" : " ↓";
+  };
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedData.length / itemsPerPage)
+  );
+
+  const currentItems = sortedData.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const summary = useMemo(() => {
+    return {
+      participants: rawData.length,
+      running: rawData.filter((u) => getStatus(u) === "Running").length,
+      paid: rawData.filter((u) => getStatus(u) === "Paid").length,
+      noReward: rawData.filter((u) => getStatus(u) === "No Reward").length,
+      excluded: rawData.filter((u) => getStatus(u) === "Excluded").length,
+      totalPaid: rawData.reduce(
+        (sum, u) => sum + Number(u.rewardAmount || 0),
+        0
+      )
+    };
+  }, [rawData, now]);
+
+  const formatDate = (date) => {
+    if (!date) return "-";
+
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return "-";
+
+    return parsed.toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
+  };
+
+  const statusStyle = (status) => {
+    const styles = {
+      Paid: "bg-emerald-100 text-emerald-700",
+      Running: "bg-blue-100 text-blue-700",
+      Processing: "bg-amber-100 text-amber-700",
+      "No Reward": "bg-gray-100 text-gray-700",
+      Excluded: "bg-purple-100 text-purple-700"
     };
 
-    // ----------------- 🔥 IMPERSONATE (LOGIN) LOGIC -----------------
-    // const handleImpersonate = async (targetId) => {
-    //     const result = await Swal.fire({
-    //         title: 'Login as User?',
-    //         text: `Do you want to log in to the account with User ID: #${targetId}?`,
-    //         icon: 'question',
-    //         showCancelButton: true,
-    //         confirmButtonText: 'Yes, Login'
-    //     });
+    return styles[status] || "bg-gray-100 text-gray-700";
+  };
 
-    //     if (!result.isConfirmed) return;
-
-    //     try {
-    //         Swal.fire({ title: 'Logging in...', didOpen: () => { Swal.showLoading(); } });
-    //         const token = localStorage.getItem('adminToken');
-            
-    //         const res = await api.post('/admin/impersonate', { userId: targetId }, {
-    //             headers: { Authorization: `Bearer ${token}` }
-    //         });
-
-    //         if (res.data.token) {
-    //             Swal.close();
-    //             const { token: userToken, user: impersonatedUser } = res.data;
-    //             const userDataStr = encodeURIComponent(JSON.stringify(impersonatedUser));
-
-    //             let targetBaseUrl = window.location.hostname.includes("localhost") || window.location.hostname === "127.0.0.1" 
-    //                 ? "http://localhost:5173" 
-    //                 : "https://helpingpools.online";
-
-    //             const mainWebsiteUrl = `${targetBaseUrl}/login?token=${userToken}&user=${userDataStr}`;
-
-    //             const link = document.createElement('a');
-    //             link.href = mainWebsiteUrl;
-    //             link.target = '_blank';
-    //             link.rel = 'noopener noreferrer'; 
-    //             document.body.appendChild(link);
-    //             link.click();
-    //             document.body.removeChild(link);
-    //         }
-    //     } catch (error) {
-    //         Swal.fire('Error', error.response?.data?.message || "Failed to log in", 'error');
-    //     }
-    // };
-
-    // Calculate Time Left
-    const getTimeLeft = (deadlineStr) => {
-        const deadline = new Date(deadlineStr).getTime();
-        const now = new Date().getTime();
-        const diff = deadline - now;
-
-        if (diff <= 0) return "Expired";
-        
-        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        return `${d}d ${h}h left`;
-    };
-
-    // Reset page on filter change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, fromDate, toDate, itemsPerPage]);
-
-    // 1. 🔥 FILTERING LOGIC
-    const filteredData = useMemo(() => {
-        return rawProgressData.filter(user => {
-            const lowerSearch = searchTerm.toLowerCase();
-            
-            // Search in User ID or Name
-            const matchesSearch = (
-                user.userId?.toString().includes(lowerSearch) ||
-                user.name?.toLowerCase().includes(lowerSearch)
-            );
-
-            // Date Filter (on TopUp Date)
-            let matchesDate = true;
-            if (fromDate || toDate) {
-                const txnDate = new Date(user.topUpDate).setHours(0, 0, 0, 0);
-                const from = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : null;
-                const to = toDate ? new Date(toDate).setHours(0, 0, 0, 0) : null;
-
-                if (from && txnDate < from) matchesDate = false;
-                if (to && txnDate > to) matchesDate = false;
-            }
-
-            return matchesSearch && matchesDate;
-        });
-    }, [rawProgressData, searchTerm, fromDate, toDate]);
-
-    // 2. 🔥 SORTING LOGIC
-    const sortedData = useMemo(() => {
-        return [...filteredData].sort((a, b) => {
-            let valA = a[sortConfig.key];
-            let valB = b[sortConfig.key];
-
-            if (sortConfig.key === 'topUpDate' || sortConfig.key === 'deadline') {
-                valA = new Date(a[sortConfig.key]).getTime();
-                valB = new Date(b[sortConfig.key]).getTime();
-            } else if (sortConfig.key === 'userId' || sortConfig.key === 'directs') {
-                valA = Number(a[sortConfig.key]) || 0;
-                valB = Number(b[sortConfig.key]) || 0;
-            }
-
-            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
-            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
-            return 0;
-        });
-    }, [filteredData, sortConfig]);
-
-    const requestSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
-        setSortConfig({ key, direction });
-    };
-
-    const getSortIcon = (columnName) => {
-        if (sortConfig.key === columnName) {
-            return sortConfig.direction === 'ascending' ? ' ↑' : ' ↓';
-        }
-        return ' ↕';
-    };
-
-    // 3. 🔥 PAGINATION LOGIC
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(sortedData.length / itemsPerPage) || 1;
-
-    const handleNext = () => {
-        if (currentPage < totalPages) setCurrentPage(prev => prev + 1);
-    };
-
-    const handlePrev = () => {
-        if (currentPage > 1) setCurrentPage(prev => prev - 1);
-    };
-
-    return (
-        <div className="p-4 text-black animate-in fade-in duration-500">
-            <h2 className="text-xl font-semibold pt-12 mb-6 text-indigo-600 flex items-center gap-2">
-                <Timer size={24} /> Fast Track Offer Tracker
-            </h2>
-            
-            {/* 🔹 TOP CONTROLS */}
-            <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-6">
-                <div className="flex flex-col md:flex-row gap-2 w-full xl:w-auto flex-wrap">
-                    <input
-                        type="text"
-                        className="border border-gray-300 rounded px-3 py-2 w-full md:w-64 shadow-sm focus:outline-none focus:border-indigo-500"
-                        placeholder="🔍 Search User ID or Name..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-
-                    <div className="flex items-center gap-2 border border-gray-300 rounded px-3 py-2 bg-white shadow-sm">
-                        <span className="text-sm text-gray-500">From:</span>
-                        <input
-                            type="date"
-                            className="outline-none bg-transparent text-sm"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="flex items-center gap-2 border border-gray-300 rounded px-3 py-2 bg-white shadow-sm">
-                        <span className="text-sm text-gray-500">To:</span>
-                        <input
-                            type="date"
-                            className="outline-none bg-transparent text-sm"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                        />
-                    </div>
-
-                    {(fromDate || toDate) && (
-                        <button
-                            onClick={() => { setFromDate(""); setToDate(""); }}
-                            className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded shadow-sm text-sm font-bold transition"
-                        >
-                            Clear Dates
-                        </button>
-                    )}
-
-                    <select
-                        className="border border-gray-300 rounded px-3 py-2 bg-white shadow-sm text-sm font-medium"
-                        value={itemsPerPage}
-                        onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                    >
-                        <option value={10}>Show 10</option>
-                        <option value={20}>Show 20</option>
-                        <option value={50}>Show 50</option>
-                        <option value={100}>Show 100</option>
-                    </select>
-                </div>
-
-                <div className="text-gray-600 text-sm font-bold bg-indigo-50 px-4 py-2 rounded border border-indigo-100">
-                    Active Participants: {filteredData.length}
-                </div>
-            </div>
-            
-            {loading ? (
-                <div className="text-center py-10 text-gray-500 font-bold animate-pulse">⏳ Fetching Tracker Data...</div>
-            ) : (
-                <>
-                    {/* 🔹 TABLE WITH PROGRESS */}
-                    <div className="overflow-auto border rounded-lg shadow-sm">
-                        <table className="min-w-full bg-white text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-600 uppercase text-xs border-b">
-                                <tr>
-                                    <th className="px-4 py-3 border-r text-center">Sr.</th>
-                                    
-                                    <th className="px-4 py-3 border-r cursor-pointer hover:bg-gray-200" onClick={() => requestSort('userId')}>
-                                        User ID (Login) {getSortIcon('userId')}
-                                    </th>
-                                    
-                                    <th className="px-4 py-3 border-r cursor-pointer hover:bg-gray-200" onClick={() => requestSort('name')}>
-                                        Name {getSortIcon('name')}
-                                    </th>
-                                    
-                                    <th className="px-4 py-3 border-r text-center cursor-pointer hover:bg-gray-200" onClick={() => requestSort('topUpDate')}>
-                                        TopUp Date {getSortIcon('topUpDate')}
-                                    </th>
-                                    
-                                    <th className="px-4 py-3 border-r text-center cursor-pointer hover:bg-gray-200" onClick={() => requestSort('deadline')}>
-                                        Deadline {getSortIcon('deadline')}
-                                    </th>
-                                    
-                                    <th className="px-4 py-3 border-r text-center cursor-pointer hover:bg-gray-200 text-indigo-700" onClick={() => requestSort('directs')}>
-                                        Directs Done {getSortIcon('directs')}
-                                    </th>
-
-                                    <th className="px-4 py-3 text-center cursor-pointer hover:bg-gray-200" onClick={() => requestSort('status')}>
-                                        Status {getSortIcon('status')}
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {currentItems.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="7" className="text-center py-8 text-gray-500 font-bold">No active participants found</td>
-                                    </tr>
-                                ) : (
-                                    currentItems.map((user, idx) => (
-                                        <tr key={user.userId} className="hover:bg-indigo-50 border-b transition-colors">
-                                            <td className="px-4 py-3 border-r font-bold text-gray-500 text-center">
-                                                {indexOfFirstItem + idx + 1}
-                                            </td>
-                                            
-                                            <td className="px-4 py-3 border-r font-black text-indigo-600">
-                                                <button
-                                                    onClick={() => handleImpersonate(user.userId)}
-                                                    className="flex items-center gap-1 hover:text-indigo-800 hover:underline transition-all"
-                                                    title="Login as this User"
-                                                >
-                                                    #{user.userId}
-                                                    {/* <ExternalLink size={12} className="opacity-70" />
-                                                     */}
-                                                </button>
-                                            </td>
-                                            
-                                            <td className="px-4 py-3 border-r font-bold text-slate-800 capitalize">
-                                                {user.name}
-                                            </td>
-                                            
-                                            <td className="px-4 py-3 border-r text-center text-xs text-slate-500 font-medium">
-                                                {new Date(user.topUpDate).toLocaleDateString('en-IN')}
-                                            </td>
-                                            
-                                            <td className="px-4 py-3 border-r text-center">
-                                                <span className="text-xs font-bold text-slate-600 block">
-                                                    {new Date(user.deadline).toLocaleDateString('en-IN')}
-                                                </span>
-                                                {user.status === 'In Progress' && (
-                                                    <span className="text-[10px] text-orange-500 font-black tracking-widest uppercase">
-                                                        ({getTimeLeft(user.deadline)})
-                                                    </span>
-                                                )}
-                                            </td>
-
-                                            <td className="px-4 py-3 border-r text-center">
-                                                <span className={`px-3 py-1 rounded-md font-black text-sm ${user.directs >= 6 ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
-                                                    {user.directs} / 6
-                                                </span>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-center">
-                                                {user.status === 'Achieved' && (
-                                                    <span className="flex items-center justify-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 text-[10px] font-black uppercase tracking-widest w-fit mx-auto">
-                                                        <CheckCircle size={14}/> Achieved
-                                                    </span>
-                                                )}
-                                                {user.status === 'In Progress' && (
-                                                    <span className="flex items-center justify-center gap-1 text-orange-600 bg-orange-50 px-2 py-1 rounded border border-orange-100 text-[10px] font-black uppercase tracking-widest w-fit mx-auto">
-                                                        <Clock size={14}/> Running
-                                                    </span>
-                                                )}
-                                               {(user.status === 'Failed' || user.status === 'Failed / Closed' || user.status.includes('Fail')) && (
-    <span className="flex items-center justify-center gap-1 text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 text-[10px] font-black uppercase tracking-widest w-fit mx-auto">
-        <XCircle size={14}/> Failed / Closed
-    </span>
-)}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* 🔹 PAGINATION CONTROLS */}
-                    {filteredData.length > 0 && (
-                        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-4 text-sm">
-                            <span className="text-gray-600 font-medium">
-                                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} Records
-                            </span>
-                            
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handlePrev}
-                                    disabled={currentPage === 1}
-                                    className={`px-4 py-2 border rounded font-bold transition ${
-                                        currentPage === 1 
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                            : 'bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200'
-                                    }`}
-                                >
-                                    Previous
-                                </button>
-                                
-                                <button className="px-4 py-2 border rounded bg-indigo-600 text-white font-black shadow-md cursor-default">
-                                    {currentPage}
-                                </button>
-
-                                <button
-                                    onClick={handleNext}
-                                    disabled={currentPage === totalPages}
-                                    className={`px-4 py-2 border rounded font-bold transition ${
-                                        currentPage === totalPages 
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                            : 'bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200'
-                                    }`}
-                                >
-                                    Nextt
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </>
-            )}
+  return (
+    <div className="p-3 md:p-5 text-slate-800 min-h-screen">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-5 pt-10">
+        <div>
+          <h2 className="text-xl md:text-2xl font-black text-emerald-700 flex items-center gap-2">
+            <Crown size={24} />
+            Royalty Offer Tracker
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            First top-up based 5-day Royalty Reward progress
+          </p>
         </div>
-    );
+
+        <button
+          onClick={fetchProgress}
+          disabled={loading}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+        >
+          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+          Refresh
+        </button>
+      </div>
+
+      {/* SUMMARY CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+        <div className="bg-white border rounded-xl p-3 shadow-sm">
+          <Users className="text-blue-600 mb-2" size={20} />
+          <p className="text-xs text-gray-500">Participants</p>
+          <h3 className="text-xl font-black">{summary.participants}</h3>
+        </div>
+
+        <div className="bg-white border rounded-xl p-3 shadow-sm">
+          <Clock className="text-blue-600 mb-2" size={20} />
+          <p className="text-xs text-gray-500">Running</p>
+          <h3 className="text-xl font-black">{summary.running}</h3>
+        </div>
+
+        <div className="bg-white border rounded-xl p-3 shadow-sm">
+          <CheckCircle className="text-emerald-600 mb-2" size={20} />
+          <p className="text-xs text-gray-500">Paid</p>
+          <h3 className="text-xl font-black">{summary.paid}</h3>
+        </div>
+
+        <div className="bg-white border rounded-xl p-3 shadow-sm">
+          <XCircle className="text-gray-500 mb-2" size={20} />
+          <p className="text-xs text-gray-500">No Reward</p>
+          <h3 className="text-xl font-black">{summary.noReward}</h3>
+        </div>
+
+        <div className="bg-white border rounded-xl p-3 shadow-sm col-span-2 lg:col-span-1">
+          <Gift className="text-amber-500 mb-2" size={20} />
+          <p className="text-xs text-gray-500">Total Paid Amount</p>
+          <h3 className="text-xl font-black text-emerald-700">
+            ${summary.totalPaid}
+          </h3>
+        </div>
+      </div>
+
+      {/* REWARD RULES */}
+      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 mb-5">
+        <h3 className="text-sm font-black text-emerald-800 mb-2">
+          Royalty Reward Rules
+        </h3>
+
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="bg-white rounded-lg p-2">
+            <strong className="text-emerald-700">$30</strong>
+            <p className="text-xs text-gray-600">5 directs</p>
+          </div>
+          <div className="bg-white rounded-lg p-2">
+            <strong className="text-emerald-700">$70</strong>
+            <p className="text-xs text-gray-600">10 directs</p>
+          </div>
+          <div className="bg-white rounded-lg p-2">
+            <strong className="text-emerald-700">$150</strong>
+            <p className="text-xs text-gray-600">15+ directs</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-emerald-800 mt-2">
+          Unique direct referrals only. Each direct qualifies only when their
+          first successful top-up is exactly $30. Offer duration: 5 days.
+        </p>
+      </div>
+
+      {/* FILTERS */}
+      <div className="bg-white border rounded-xl p-3 mb-4 shadow-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-3 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Search ID or name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm"
+            title="Activation from date"
+          />
+
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm"
+            title="Activation to date"
+          />
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="ALL">All Status</option>
+            <option value="Running">Running</option>
+            <option value="Processing">Processing</option>
+            <option value="Paid">Paid</option>
+            <option value="No Reward">No Reward</option>
+            <option value="Excluded">Excluded</option>
+          </select>
+
+          <select
+            value={itemsPerPage}
+            onChange={(e) => setItemsPerPage(Number(e.target.value))}
+            className="border rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value={10}>Show 10</option>
+            <option value={20}>Show 20</option>
+            <option value={50}>Show 50</option>
+            <option value={100}>Show 100</option>
+          </select>
+        </div>
+
+        {(searchTerm || fromDate || toDate || statusFilter !== "ALL") && (
+          <button
+            onClick={() => {
+              setSearchTerm("");
+              setFromDate("");
+              setToDate("");
+              setStatusFilter("ALL");
+            }}
+            className="mt-2 text-xs text-red-600 font-bold"
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+
+      {/* TABLE */}
+      <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="text-center py-12 text-gray-500">
+            Loading Royalty data...
+          </div>
+        ) : error ? (
+          <div className="text-center py-10 px-3">
+            <p className="text-red-600 text-sm font-bold">{error}</p>
+            <p className="text-xs text-gray-500 mt-2">
+              Check that the backend route /admin/royalty-progress exists.
+            </p>
+            <button
+              onClick={fetchProgress}
+              className="mt-3 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-[1050px] w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                  <tr>
+                    <th className="px-3 py-3 text-center">Sr.</th>
+
+                    <th
+                      className="px-3 py-3 cursor-pointer"
+                      onClick={() => requestSort("userId")}
+                    >
+                      User ID{sortIcon("userId")}
+                    </th>
+
+                    <th
+                      className="px-3 py-3 cursor-pointer"
+                      onClick={() => requestSort("name")}
+                    >
+                      Name{sortIcon("name")}
+                    </th>
+
+                    <th className="px-3 py-3 text-center">
+                      First Top-up
+                    </th>
+
+                    <th
+                      className="px-3 py-3 text-center cursor-pointer"
+                      onClick={() => requestSort("activationAt")}
+                    >
+                      Activation{sortIcon("activationAt")}
+                    </th>
+
+                    <th
+                      className="px-3 py-3 text-center cursor-pointer"
+                      onClick={() => requestSort("expiresAt")}
+                    >
+                      Expiry{sortIcon("expiresAt")}
+                    </th>
+
+                    <th
+                      className="px-3 py-3 text-center cursor-pointer"
+                      onClick={() => requestSort("directCount")}
+                    >
+                      Qualifying Directs{sortIcon("directCount")}
+                    </th>
+
+                    <th className="px-3 py-3 text-center">
+                      Current Tier
+                    </th>
+
+                    <th
+                      className="px-3 py-3 text-center cursor-pointer"
+                      onClick={() => requestSort("rewardAmount")}
+                    >
+                      Reward Paid{sortIcon("rewardAmount")}
+                    </th>
+
+                    <th className="px-3 py-3 text-center">Status</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {currentItems.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan="10"
+                        className="text-center py-10 text-gray-500 font-semibold"
+                      >
+                        No Royalty participants found.
+                      </td>
+                    </tr>
+                  ) : (
+                    currentItems.map((user, index) => {
+                      const count = Number(user.directCount || 0);
+                      const currentTier = getTierReward(count);
+                      const status = getStatus(user);
+
+                      return (
+                        <tr
+                          key={user.userId}
+                          className="border-t hover:bg-emerald-50/50"
+                        >
+                          <td className="px-3 py-3 text-center text-gray-500">
+                            {(currentPage - 1) * itemsPerPage + index + 1}
+                          </td>
+
+                          <td className="px-3 py-3 font-bold text-emerald-700">
+                            #{user.userId}
+                          </td>
+
+                          <td className="px-3 py-3 font-semibold capitalize">
+                            {user.name || "-"}
+                            {user.role === "leader" && (
+                              <span className="block text-[10px] text-purple-600">
+                                Leader
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-3 py-3 text-center">
+                            <span className="font-bold">
+                              ${Number(user.firstTopUpAmount || 0)}
+                            </span>
+                          </td>
+
+                          <td className="px-3 py-3 text-center text-xs">
+                            {formatDate(user.activationAt)}
+                          </td>
+
+                          <td className="px-3 py-3 text-center text-xs">
+                            <div>{formatDate(user.expiresAt)}</div>
+                            {status === "Running" && (
+                              <span className="text-blue-600 font-bold text-[10px]">
+                                {getTimeLeft(user.expiresAt)}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-3 py-3 text-center">
+                            <span className="inline-block rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1 font-black text-emerald-700">
+                              {count}
+                            </span>
+                          </td>
+
+                          <td className="px-3 py-3 text-center">
+                            <span className="font-black text-emerald-700">
+                              ${currentTier}
+                            </span>
+                          </td>
+
+                          <td className="px-3 py-3 text-center font-bold">
+                            ${Number(user.rewardAmount || 0)}
+                          </td>
+
+                          <td className="px-3 py-3 text-center">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black ${statusStyle(status)}`}
+                            >
+                              {status === "Paid" && <CheckCircle size={12} />}
+                              {status === "Excluded" && <XCircle size={12} />}
+                              {status === "Running" && <Clock size={12} />}
+                              {status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* PAGINATION */}
+            <div className="flex flex-wrap justify-between items-center gap-3 p-3 border-t">
+              <span className="text-xs text-gray-500">
+                Showing {sortedData.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}
+                {" - "}
+                {Math.min(currentPage * itemsPerPage, sortedData.length)}
+                {" of "}
+                {sortedData.length} records
+              </span>
+
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 border rounded-lg text-xs font-bold disabled:opacity-40"
+                >
+                  Previous
+                </button>
+
+                <span className="text-xs font-bold">
+                  {currentPage} / {totalPages}
+                </span>
+
+                <button
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-2 border rounded-lg text-xs font-bold disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 };
 
-export default FastTrackProgress;
+export default RoyaltyProgress;

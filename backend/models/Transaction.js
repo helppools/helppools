@@ -275,6 +275,12 @@ transactionSchema.index(
   }
 );
 
+transactionSchema.index({
+  userId: 1,
+  source: 1,
+  date: -1
+});
+
 // Convert Decimal128 values into normal numbers in API responses
 const transformAmount = (doc, ret) => {
   const decimalFields = [

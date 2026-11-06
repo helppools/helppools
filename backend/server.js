@@ -454,6 +454,10 @@ const {
     startPackageProgressCron,
 } = require('./cron/packageProgressCron');
 
+const {
+  startRoyaltyCron
+} = require("./cron/royaltyCron");
+
 // Demo Community Counter
 const DemoCounter = require('./models/DemoCounter');
 const {
@@ -622,6 +626,11 @@ async function startServer() {
             startPackageProgressCron();
             console.log('✅ Package Progress Cron Started');
         }
+
+        // Royalty Offer Cron
+startRoyaltyCron();
+console.log("✅ Royalty Cron Started");
+
 
         // Start Demo Counter
         await startDemoCounter();

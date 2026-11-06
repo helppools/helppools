@@ -157,6 +157,47 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
+    
+    
+    // ==========================================
+// FIRST TOP-UP TRACKING FOR ROYALTY
+// ==========================================
+firstTopUpAt: {
+  type: Date,
+  default: null,
+  index: true
+},
+
+firstTopUpAmount: {
+  type: Number,
+  default: 0,
+  min: 0
+},
+
+royaltyProcessedAt: {
+  type: Date,
+  default: null
+},
+
+royaltyDirectCount: {
+  type: Number,
+  default: 0,
+  min: 0
+},
+
+royaltyIncome: {
+  type: Number,
+  default: 0,
+  min: 0
+},
+
+totalRoyaltyIncome: {
+  type: Number,
+  default: 0,
+  min: 0
+},
+
+
     // ==========================================
     // OLD TOP-UP HISTORY
     // Kept for existing compatibility
@@ -229,6 +270,18 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+
+    recycleDirectIncome: {
+  type: Number,
+  default: 0,
+  min: 0
+},
+
+totalRecycleDirectIncome: {
+  type: Number,
+  default: 0,
+  min: 0
+},
 
     levelIncome: {
       type: Number,

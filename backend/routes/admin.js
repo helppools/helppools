@@ -719,7 +719,7 @@ router.put('/update-role/:userId', verifyAdmin, async (req, res) => {
         type: "credit_to_wallet",
         amount: 30,
         source: "admin_bonus",
-        description: "Promoted to Leader: $30 Showcase Balance Added",
+        description: "Promoted to Leader: $30 ",
         status: "success",
         date: new Date()
       });
@@ -1465,110 +1465,237 @@ router.get('/global-team', verifyAdmin, async (req, res) => {
 //     }
 // });
 
-router.get('/fast-track-progress', verifyAdmin, async (req, res) => {
-    try {
-        // 🔥 TIME CONFIGURATIONS (SYNCED WITH CRON)
-        const PHASE1_START = new Date("2026-06-14T00:00:00+05:30");
-        const PHASE1_END = new Date("2026-07-06T23:59:59+05:30"); 
-        const PHASE2_START = new Date("2026-07-11T00:00:00+05:30"); // 👇 NAYA PHASE 2 👇
-        
-        const now = new Date();
 
-        // 1. 🔥 Ek hi baar saara zaroori data uthao 
-        // 🛑 LEADERS KO LIST SE GAYAB KAR DIYA (role: { $ne: 'leader' })
-        const allUsers = await User.find({ 
-            isToppedUp: true,
-            role: { $ne: 'leader' } 
+const RoyaltyReward = require("../models/RoyaltyReward");
+
+router.get("/royalty-progress", verifyAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const FIVE_DAYS = 5 * 24 * 60 * 60 * 1000;
+
+    // First successful top-up: oldest valid package entry.
+    // Legacy fallback is used only when packages are unavailable.
+    const getFirstTopUp = (user) => {
+      if (!user) return null;
+
+      const packages = (user.packages || [])
+        .filter((pkg) => {
+          const amount = Number(pkg.amount);
+          const date = new Date(pkg.startDate);
+
+          return (
+            amount > 0 &&
+            pkg.startDate &&
+            !Number.isNaN(date.getTime())
+          );
         })
-        .select('userId name topUpDate sponsorId role')
-        .lean();
+        .sort(
+          (a, b) =>
+            new Date(a.startDate).getTime() -
+            new Date(b.startDate).getTime()
+        );
 
-        // 2. RAM (Memory) me ek Map banayenge fast calculation ke liye
-        const userMap = {};
-        for (let user of allUsers) {
-            if (!user.topUpDate) continue;
-            
-            const topUpDate = new Date(user.topUpDate);
-            
-            // Sponsor ko apne top-up se 144 ghante milte hain
-            const hourDeadline = new Date(topUpDate.getTime() + (144 * 60 * 60 * 1000));
-            
-            let finalCutoff;
-            let directStartTime;
-            let phase = 0;
+      if (packages.length > 0) {
+        return {
+          amount: Number(packages[0].amount),
+          date: new Date(packages[0].startDate)
+        };
+      }
 
-            // 🔹 PHASE 1 LOGIC (14 June - 6 July)
-            if (topUpDate >= PHASE1_START && topUpDate <= PHASE1_END) {
-                phase = 1;
-                // SMART CUTOFF: Ya toh 144 ghante, ya 6 July raat 12 baje (Jo bhi pehle aaye)
-                finalCutoff = new Date(Math.min(hourDeadline.getTime(), PHASE1_END.getTime()));
-                directStartTime = PHASE1_START;
-            } 
-            // 🔹 PHASE 2 LOGIC (11 July Se)
-            else if (topUpDate >= PHASE2_START) {
-                phase = 2;
-                // Phase 2 me seedha 144 ghante milenge
-                finalCutoff = hourDeadline;
-                directStartTime = PHASE2_START;
-            } 
-            // 🔹 BLACKOUT ZONE YA OLD OFFER: Progress me nahi dikhayenge
-            else {
-                continue; 
-            }
-            
-            userMap[user.userId] = {
-                userId: user.userId,
-                name: user.name,
-                topUpDate: user.topUpDate,
-                deadline: finalCutoff,
-                directStartTime: directStartTime,
-                phase: phase,
-                directs: 0
-            };
+      if (
+        user.isToppedUp === true &&
+        Number(user.topUpAmount) > 0 &&
+        user.topUpDate
+      ) {
+        const date = new Date(user.topUpDate);
+
+        if (!Number.isNaN(date.getTime())) {
+          return {
+            amount: Number(user.topUpAmount),
+            date
+          };
         }
+      }
 
-        // 3. 🔥 In-Memory Directs Calculation (Database par no load)
-        for (let directUser of allUsers) {
-            if (directUser.sponsorId && userMap[directUser.sponsorId] && directUser.topUpDate) {
-                const sponsor = userMap[directUser.sponsorId];
-                const directTopUpDate = new Date(directUser.topUpDate);
+      return null;
+    };
 
-                // Check: Direct user sponsor ki start time ke baad aur cutoff se pehle aaya ho
-                if (directTopUpDate >= sponsor.directStartTime && directTopUpDate <= sponsor.deadline) {
-                    sponsor.directs += 1;
-                }
-            }
+    // All users with possible successful top-up records.
+    const allUsers = await User.find({
+      $or: [
+        { "packages.0": { $exists: true } },
+        {
+          isToppedUp: true,
+          topUpDate: { $ne: null }
         }
+      ]
+    })
+      .select(
+        "userId name role sponsorId packages isToppedUp topUpAmount topUpDate royaltyProcessedAt royaltyIncome totalRoyaltyIncome"
+      )
+      .lean();
 
-        // 4. Sirf unko filter karenge jinke > 0 directs hain
-        let progressList = [];
-        for (let key in userMap) {
-            const sponsor = userMap[key];
-            if (sponsor.directs >= 1) {
-                let status = 'In Progress';
-                
-                if (sponsor.directs >= 6) {
-                    status = 'Achieved';
-                } 
-                // Agar aaj ki date cutoff ko cross kar chuki hai, toh sidha Failed
-                else if (now > sponsor.deadline) {
-                    status = 'Failed / Closed';
-                }
+    // Build first-top-up lookup for every user.
+    const userMap = new Map();
 
-                sponsor.status = status;
-                progressList.push(sponsor);
-            }
-        }
+    for (const user of allUsers) {
+      const firstTopUp = getFirstTopUp(user);
 
-        // 5. Sabse zyada directs wale top par
-        progressList.sort((a, b) => b.directs - a.directs);
-        
-        res.json({ success: true, data: progressList });
-    } catch (error) {
-        console.error("Fast Track Progress Error:", error);
-        res.status(500).json({ success: false, message: "Server Error" });
+      if (!firstTopUp || !user.userId) continue;
+
+      userMap.set(String(user.userId), {
+        userId: user.userId,
+        name: user.name || "",
+        role: user.role || "user",
+        sponsorId: user.sponsorId,
+        firstTopUpAmount: firstTopUp.amount,
+        activationAt: firstTopUp.date,
+        expiresAt: new Date(firstTopUp.date.getTime() + FIVE_DAYS),
+        directCount: 0
+      });
     }
+
+    // Count each qualifying direct exactly once.
+    for (const directUser of allUsers) {
+      if (directUser.sponsorId == null) continue;
+
+      const sponsor = userMap.get(String(directUser.sponsorId));
+
+      if (!sponsor) continue;
+
+      const directFirstTopUp = getFirstTopUp(directUser);
+
+      if (!directFirstTopUp) continue;
+
+      // Only first successful top-up of exactly $30 qualifies.
+      if (directFirstTopUp.amount !== 30) continue;
+
+      // Direct must top up inside sponsor's 5-day offer window.
+      const directDate = directFirstTopUp.date;
+
+      if (
+        directDate >= sponsor.activationAt &&
+        directDate <= sponsor.expiresAt
+      ) {
+        sponsor.directCount += 1;
+      }
+    }
+
+    // Load already processed Royalty records.
+    const rewardRecords = await RoyaltyReward.find({})
+      .select(
+        "userId directCount rewardAmount rewardTier status processedAt transactionId"
+      )
+      .lean();
+
+    const rewardMap = new Map(
+      rewardRecords.map((record) => [
+        String(record.userId),
+        record
+      ])
+    );
+
+    const progressList = [];
+
+    for (const sponsor of userMap.values()) {
+      const rewardRecord = rewardMap.get(String(sponsor.userId));
+
+      const isLeader =
+        String(sponsor.role).toLowerCase() === "leader";
+
+      const processed = Boolean(
+        sponsor.royaltyProcessedAt || rewardRecord?.processedAt
+      );
+
+      const isExpired = now >= sponsor.expiresAt;
+
+      // For processed users, show the final recorded direct count.
+      const directCount = processed && rewardRecord
+        ? Number(rewardRecord.directCount || 0)
+        : sponsor.directCount;
+
+      let status = "PENDING";
+
+      if (isLeader) {
+        status = "EXCLUDED";
+      } else if (rewardRecord?.status) {
+        status = rewardRecord.status;
+      } else if (processed) {
+        status = directCount >= 5 ? "PAID" : "NO_REWARD";
+      } else if (isExpired) {
+        // Cron has not processed the expired offer yet.
+        status = "PROCESSING";
+      }
+
+      const rewardAmount =
+        status === "PAID"
+          ? Number(
+              rewardRecord?.rewardAmount ||
+              sponsor.totalRoyaltyIncome ||
+              sponsor.royaltyIncome ||
+              0
+            )
+          : 0;
+
+      const rewardTier =
+        Number(rewardRecord?.rewardTier || 0) ||
+        (directCount >= 15 ? 3 : directCount >= 10 ? 2 : directCount >= 5 ? 1 : 0);
+
+      progressList.push({
+        userId: sponsor.userId,
+        name: sponsor.name,
+        role: sponsor.role,
+
+        firstTopUpAmount: sponsor.firstTopUpAmount,
+        activationAt: sponsor.activationAt,
+        expiresAt: sponsor.expiresAt,
+
+        directCount,
+        currentTier:
+          directCount >= 15 ? 150 :
+          directCount >= 10 ? 70 :
+          directCount >= 5 ? 30 : 0,
+
+        rewardAmount,
+        rewardTier,
+        status,
+        processed,
+
+        processedAt:
+          rewardRecord?.processedAt ||
+          sponsor.royaltyProcessedAt ||
+          null
+      });
+    }
+
+    // Running and pending first, then highest direct count.
+    progressList.sort((a, b) => {
+      if (b.directCount !== a.directCount) {
+        return b.directCount - a.directCount;
+      }
+
+      return (
+        new Date(b.activationAt).getTime() -
+        new Date(a.activationAt).getTime()
+      );
+    });
+
+    return res.json({
+      success: true,
+      total: progressList.length,
+      data: progressList
+    });
+
+  } catch (error) {
+    console.error("Royalty Admin Progress Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch Royalty progress"
+    });
+  }
 });
+
 
 
 // POST /auth/register (Admin adds a new user)
