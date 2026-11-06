@@ -495,16 +495,16 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
             return res.status(403).json({ message: "Access Denied: Your IP has been blocked by the Administrator." });
         }
 
-        // Check for recent registration from this IP in the last 10 minutes
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-        const recentRegistrationIP = await User.findOne({ 
-            ipAddress: userIP, 
-            createdAt: { $gte: tenMinutesAgo } 
-        });
+        // // Check for recent registration from this IP in the last 10 minutes
+        // const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        // const recentRegistrationIP = await User.findOne({ 
+        //     ipAddress: userIP, 
+        //     createdAt: { $gte: tenMinutesAgo } 
+        // });
         
-        if (recentRegistrationIP) {
-            return res.status(429).json({ message: "Spam: Please wait creating another account from this network." });
-        }
+        // if (recentRegistrationIP) {
+        //     return res.status(429).json({ message: "Spam: Please wait creating another account from this network." });
+        // }
     }
 
     // 🛑 C. DEVICE COOLDOWN 
