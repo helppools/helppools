@@ -444,7 +444,7 @@ const TotalSystemUsers = ({
   );
 
   // Real users + demo users + fixed starting offset
-  const displayCount = 500 + realUsers + demoUsers;
+  const displayCount = 89 + realUsers + demoUsers;
 
   return (
     <div className="w-full mb-5">

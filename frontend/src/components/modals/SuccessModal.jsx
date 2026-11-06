@@ -938,7 +938,7 @@ const SuccessModal = ({
             className="hp-success-button"
           >
             <CheckCircle2 size={16} />
-            Acknowledge & Close
+            Done
           </button>
         </div>
       </div>

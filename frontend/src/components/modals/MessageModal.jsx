@@ -442,7 +442,7 @@ const MessageModal = ({
             className="hp-message-button"
           >
             <CheckCircle2 size={15} style={{ marginRight: 7 }} />
-            Acknowledge
+            Done
           </button>
 
           <div className="hp-message-footer-note">
