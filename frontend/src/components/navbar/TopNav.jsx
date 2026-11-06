@@ -632,7 +632,7 @@ const TopNav = ({ onHamburgerClick }) => {
               title="Logout"
             >
               <LogOut size={18} strokeWidth={2.5} />
-              <span className="hidden md:inline">Logout</span>
+              <span className="hidden md:inline">Logout </span>
             </button>
           </div>
 
