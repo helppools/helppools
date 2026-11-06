@@ -336,7 +336,7 @@ const SuccessModal = ({
         </span>
         <span className="hp-secure-badge">
           <ShieldCheck size={13} />
-          Secured Transaction
+           Transaction
         </span>
       </div>
     </div>

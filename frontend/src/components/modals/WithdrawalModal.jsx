@@ -12180,7 +12180,7 @@ const WithdrawalModal = ({ userId, onClose }) => {
                   </h2>
 
                   <div className="hp-withdraw-subtitle">
-                    Secure Wallet Withdrawal
+                    Wallet Withdrawal
                   </div>
                 </div>
               </div>

@@ -18,11 +18,11 @@
 // module.exports = router;
 
 
-
 const express = require("express");
 const router = express.Router();
 
 const User = require("../models/User");
+const DemoCounter = require("../models/DemoCounter");
 const FakeUser = require("../models/FakeUser");
 
 const auth = require("../middleware/authMiddleware");
@@ -30,18 +30,22 @@ const auth = require("../middleware/authMiddleware");
 // Community statistics
 router.get("/stats", auth, async (req, res) => {
   try {
-    const [totalRealUsers, demoUsers, activeDownline] = await Promise.all([
-      User.countDocuments(),
-      FakeUser.countDocuments(),
+    const [totalRealUsers, demo, activeDownline] = await Promise.all([
+      User.countDocuments({}),
+      DemoCounter.findOne({ name: "community" }).lean(),
       User.countDocuments({ isToppedUp: true })
     ]);
+
+    const demoUsers = demo?.demoUsers || 0;
 
     return res.json({
       success: true,
       data: {
         totalRealUsers,
         demoUsers,
-        activeDownline
+        totalCommunity: totalRealUsers + demoUsers,
+        activeDownline,
+        demoEnabled: demo?.enabled || false
       }
     });
   } catch (error) {
@@ -53,6 +57,9 @@ router.get("/stats", auth, async (req, res) => {
     });
   }
 });
+
+// Global real + demo users list
+// Is route ko abhi unchanged rakho.
 
 // Global real + demo users list
 router.get("/global-list", async (req, res) => {

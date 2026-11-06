@@ -2615,7 +2615,7 @@ export default function DepositModal({ onClose, user, userId }) {
 
                 <div className="hp-deposit-secure">
                   <ShieldCheck size={13} />
-                  Secure Deposit · Helping Pools
+                  Deposit · Helping Pools
                 </div>
               </>
             )}

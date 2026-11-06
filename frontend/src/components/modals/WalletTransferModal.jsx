@@ -1827,7 +1827,7 @@ const WalletTransferModal = ({ onClose }) => {
                     P2P Transfer
                   </h2>
                   <div className="hp-transfer-subheading">
-                    Secure wallet transfer
+                    wallet transfer
                   </div>
                 </div>
               </div>

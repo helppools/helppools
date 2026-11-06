@@ -7734,7 +7734,7 @@ const CreditToWalletModal = ({ userId, onClose }) => {
                   </h2>
 
                   <div className="hp-withdraw-subtitle">
-                    Secure Wallet Transfer
+                     Wallet Transfer
                   </div>
                 </div>
               </div>

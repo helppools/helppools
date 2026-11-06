@@ -695,7 +695,7 @@ const ForgotPassword = () => {
 
           <Link to="/login" className="hp-forgot-login">
             <Lock size={15} />
-            <span>Secure Login</span>
+            <span> Login</span>
           </Link>
         </div>
       </nav>
