@@ -4610,10 +4610,16 @@ async function updatePackageProgress(subscriptionId) {
     // STAGE 6 RETOPUP + ELIGIBILITY
     // -----------------------------------------
 
+    // if (
+    //   currentStage === 6 &&
+    //   (stage.status === "WAITING" || stage.status === "LOCKED")
+    // ) {
+
     if (
-      currentStage === 6 &&
-      (stage.status === "WAITING" || stage.status === "LOCKED")
-    ) {
+  currentStage === 6 &&
+  (stage.status === "WAITING" || stage.status === "LOCKED") &&
+  Number(subscription.packageAmount) !== 30
+) {
       const retopup = await checkStageFiveRetopup(
         subscription
       );
