@@ -8138,6 +8138,53 @@ const CreditToWalletModal = ({ userId, onClose }) => {
 
                       </div>
 
+<div
+  className="hp-withdraw-minimum-popup"
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "13px 15px",
+    marginTop: "10px",
+    marginBottom: "14px",
+    background: "linear-gradient(135deg, #f0fdf4 0%, #fffbeb 100%)",
+    border: "1px solid #cdebd5",
+    borderRadius: "12px",
+    color: "#456b50",
+    fontSize: "13px",
+    fontWeight: 600,
+    boxShadow: "0 3px 10px rgba(34, 100, 55, 0.07)",
+  }}
+>
+  <span
+    className="hp-withdraw-minimum-icon"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "25px",
+      height: "25px",
+      flexShrink: 0,
+      background: "#dcfce7",
+      border: "1px solid #bbebc9",
+      borderRadius: "8px",
+      color: "#16803d",
+      fontSize: "15px",
+      fontWeight: 800,
+    }}
+  >
+    ⓘ
+  </span>
+
+  <span>
+    Minimum credit wallet amount is{" "}
+    <strong style={{ color: "#15803d", fontSize: "14px", fontWeight: 800 }}>
+      $10
+    </strong>
+  </span>
+</div>
                       {/* FEE PREVIEW */}
                       <div
                         style={{
