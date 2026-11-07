@@ -11207,7 +11207,7 @@ const getStageAvailable = (stage) => {
 
 const WithdrawalModal = ({ userId, onClose }) => {
   const { user: loggedInUser, token } = useAuth();
-
+  const isPromo = String(loggedInUser?.role || "").toLowerCase() === "promo";
   const isLeader = loggedInUser?.role === "leader";
 
   const [loading, setLoading] = useState(false);
@@ -11395,6 +11395,25 @@ const WithdrawalModal = ({ userId, onClose }) => {
   const buildWithdrawalItems = () => {
     const items = [];
 
+        // PROMO USER: Skip normal income balance validation
+    if (isPromo) {
+      const totalEntered =
+        (Number(withdrawals.direct) || 0) +
+        (Number(withdrawals.level) || 0) +
+        (Number(withdrawals.reward) || 0) +
+        Object.values(stageWithdrawals).reduce(
+          (sum, value) => sum + (Number(value) || 0),
+          0
+        );
+
+      return [
+        {
+          source: "promo_demo",
+          amount: totalEntered
+        }
+      ];
+    }
+
     const addNormalItem = (source, amount, available, label) => {
       const requested = Number(amount) || 0;
 
@@ -11476,13 +11495,16 @@ const WithdrawalModal = ({ userId, onClose }) => {
       );
     }
 
-    if (!balances.isUserToppedUp) {
-      return showMessage(
-        "Top-up Required",
-        "You must activate your package before withdrawing funds.",
-        "warning"
-      );
-    }
+  if (
+  !balances.isUserToppedUp &&
+  String(loggedInUser?.role || "").toLowerCase() !== "promo"
+) {
+  return showMessage(
+    "Top-up Required",
+    "You must activate your package before withdrawing funds.",
+    "warning"
+  );
+}
 
     if (isAddressMissing || !walletAddress.trim()) {
       return showMessage(
@@ -11542,17 +11564,29 @@ const WithdrawalModal = ({ userId, onClose }) => {
 
       setLoading(true);
 
-      const response = await api.post(
-        "/wallet/withdraw",
-        {
-          transactionPassword,
-          items,
-          dryRun: true
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+    //   const response = await api.post(
+    //     "/wallet/withdraw",
+    //     {
+    //       transactionPassword,
+    //       items,
+    //       dryRun: true
+    //     },
+    //     {
+    //       headers: { Authorization: `Bearer ${token}` }
+    //     }
+    //   );
+
+    const response = await api.post(
+  isPromo ? "/wallet/promo-withdraw" : "/wallet/withdraw",
+  {
+    transactionPassword,
+    items,
+    dryRun: true
+  },
+  {
+    headers: { Authorization: `Bearer ${token}` }
+  }
+);
 
       const report = response.data?.report;
 
@@ -11560,22 +11594,40 @@ const WithdrawalModal = ({ userId, onClose }) => {
         throw new Error("Withdrawal calculation response is invalid.");
       }
 
-      setConfirmData({
-        items,
-        totalRequested: Number(report.totalRequested) || totalRequested,
-        totalFeeDeducted: Number(report.totalFeeDeducted) || 0,
-        expectedUSDT: Number(report.totalNetUSDT) || 0,
-        expectedTopup: Number(report.totalToTopupWallet) || 0,
-        sources: items
-          .map((item) => {
-            if (item.source === "plan_stage") {
-              return `Package Stage ${item.stageNumber}`;
-            }
+    //   setConfirmData({
+    //     items,
+    //     totalRequested: Number(report.totalRequested) || totalRequested,
+    //     totalFeeDeducted: Number(report.totalFeeDeducted) || 0,
+    //     expectedUSDT: Number(report.totalNetUSDT) || 0,
+    //     expectedTopup: Number(report.totalToTopupWallet) || 0,
+    //     sources: items
+    //       .map((item) => {
+    //         if (item.source === "plan_stage") {
+    //           return `Package Stage ${item.stageNumber}`;
+    //         }
 
-            return item.source;
-          })
-          .join(", ")
-      });
+    //         return item.source;
+    //       })
+    //       .join(", ")
+    //   });
+    const nextConfirmData = {
+  items,
+  totalRequested: Number(report.totalRequested) || totalRequested,
+  totalFeeDeducted: Number(report.totalFeeDeducted) || 0,
+  expectedUSDT: Number(report.totalNetUSDT) || 0,
+  expectedTopup: Number(report.totalToTopupWallet) || 0,
+  sources: items
+    .map((item) => {
+      if (item.source === "plan_stage") {
+        return `Package Stage ${item.stageNumber}`;
+      }
+
+      return item.source;
+    })
+    .join(", ")
+};
+
+await proceedWithdrawal(nextConfirmData);
     } catch (err) {
       console.error("Withdrawal validation error:", err);
 
@@ -11591,85 +11643,96 @@ const WithdrawalModal = ({ userId, onClose }) => {
     }
   };
 
-  const proceedWithdrawal = async () => {
-    if (!confirmData || loading) return;
+//   const proceedWithdrawal = async () => {
+//     if (!confirmData || loading) return;
 
-    try {
-      setLoading(true);
+const proceedWithdrawal = async (directData = null) => {
+  const withdrawalData = directData || confirmData;
 
-      const response = await api.post(
-        "/wallet/withdraw",
-        {
-          transactionPassword,
-          items: confirmData.items,
-          dryRun: false
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+  if (!withdrawalData || loading) return;
+
+  try {
+    setLoading(true);
+
+    const response = await api.post(
+      isPromo ? "/wallet/promo-withdraw" : "/wallet/withdraw",
+      {
+        transactionPassword,
+        items: withdrawalData.items,
+        dryRun: false
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    // User ne jitna amount enter kiya tha, wahi calculate karo
+    const requestedWithdrawalAmount =
+      Number(withdrawalData.totalRequested) ||
+      withdrawalData.items.reduce(
+        (sum, item) => sum + (Number(item.amount) || 0),
+        0
       );
 
-      setSuccessData({
-        userId,
-        userName: loggedInUser?.name || "",
-        amount:
-          Number(response.data?.report?.totalNetUSDT) ||
-          confirmData.expectedUSDT,
-        source: confirmData.sources
-      });
+   setSuccessData({
+  userId: response.data?.generatedId || "",
+  userName: response.data?.displayName || " User",
+  amount: requestedWithdrawalAmount,
+  source: "DEMO Withdrawal"
+});
+    setConfirmData(null);
+    setSuccessOpen(true);
 
-      setConfirmData(null);
-      setSuccessOpen(true);
+    setWithdrawals({
+      direct: "",
+      level: "",
+      reward: ""
+    });
 
-      setWithdrawals({
-        direct: "",
-        level: "",
-        reward: ""
-      });
+    setStageWithdrawals({});
+    setTransactionPassword("");
 
-      setStageWithdrawals({});
-      setTransactionPassword("");
+    await fetchData();
 
-      await fetchData();
-    } catch (err) {
-      console.error("Withdrawal submit error:", err);
+  } catch (err) {
+    console.error("Withdrawal submit error:", err);
 
-      setConfirmData(null);
+    setConfirmData(null);
 
-      showMessage(
-        "Withdrawal Error",
-        err.response?.data?.message ||
-          err.message ||
-          "Withdrawal failed.",
-        "error"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    showMessage(
+      "Withdrawal Error",
+      err.response?.data?.message ||
+        err.message ||
+        "Withdrawal failed.",
+      "error"
+    );
 
-  const closeSuccess = () => {
-    setSuccessOpen(false);
-    onClose();
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const incomeCards = [
-    {
-      key: "direct",
-      title: "Direct Income",
-      icon: <Zap size={17} />,
-      color: "#b88922",
-      balance: balances.direct
-    },
-    {
-      key: "level",
-      title: "Level Income",
-      icon: <Users size={17} />,
-      color: "#2876b8",
-      balance: balances.level
-    },
-   
-  ];
+const closeSuccess = () => {
+  setSuccessOpen(false);
+  onClose();
+};
+
+const incomeCards = [
+  {
+    key: "direct",
+    title: "Direct Income",
+    icon: <Zap size={17} />,
+    color: "#b88922",
+    balance: balances.direct
+  },
+  {
+    key: "level",
+    title: "Level Income",
+    icon: <Users size={17} />,
+    color: "#2876b8",
+    balance: balances.level
+  },
+];
 
   return (
     <>

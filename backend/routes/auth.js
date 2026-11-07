@@ -530,37 +530,125 @@ router.post('/register', checkFeature('allowRegistrations'), async (req, res) =>
     // ==========================================
 
 
-    if (!sponsorId) return res.status(400).json({ message: 'Sponsor ID is compulsory.' });
+    // if (!sponsorId) return res.status(400).json({ message: 'Sponsor ID is compulsory.' });
 
-    // 🔥 5. SPONSOR CHECK LOGIC
-    let actualSponsorId = parseInt(sponsorId);
-    let sponsorExists = await User.findOne({ userId: actualSponsorId });
-    let isFakeSponsor = false;
+    // // 🔥 5. SPONSOR CHECK LOGIC
+    // let actualSponsorId = parseInt(sponsorId);
+    // let sponsorExists = await User.findOne({ userId: actualSponsorId });
+    // let isFakeSponsor = false;
 
-    if (!sponsorExists) {
-         sponsorExists = await FakeUser.findOne({ userId: actualSponsorId });
-        if (sponsorExists) {
-            isFakeSponsor = true; 
-        }
+    // if (!sponsorExists) {
+    //      sponsorExists = await FakeUser.findOne({ userId: actualSponsorId });
+    //     if (sponsorExists) {
+    //         isFakeSponsor = true; 
+    //     }
+    // }
+
+    // if (!sponsorExists) return res.status(400).json({ message: 'Invalid Sponsor ID.' });
+
+    // if (!isFakeSponsor && sponsorExists.isSponsorDeactivated) {
+    //     return res.status(403).json({ message: 'Policy violation: The provided sponsor link is invalid or deactivated.' });    
+    // }
+
+    // // ✨ Fake Sponsor Logic
+    // if (isFakeSponsor) {
+    //     const SYSTEM_TOP_ID = 5204198; 
+    //     const topUser = await User.findOne({ userId: SYSTEM_TOP_ID }); 
+    //     if (topUser) {
+    //         actualSponsorId = topUser.userId; 
+    //         console.log(`[SYSTEM ATTACH] Fake Sponsor (${sponsorId}) used. Redirecting to Top Earning ID: ${topUser.userId}`);
+    //     } else {
+    //         console.log(`⚠️ WARNING: Top ID ${SYSTEM_TOP_ID} not found in database!`);
+    //     }
+    // }
+
+   
+   
+  
+if (!sponsorId) {
+    return res.status(400).json({
+        message: 'Sponsor ID is compulsory.'
+    });
+}
+
+let actualSponsorId = parseInt(sponsorId);
+let sponsorExists = await User.findOne({
+    userId: actualSponsorId
+});
+
+let isFakeSponsor = false;
+
+// 1. Existing FakeUser collection check
+if (!sponsorExists) {
+    sponsorExists = await FakeUser.findOne({
+        userId: actualSponsorId
+    });
+
+    if (sponsorExists) {
+        isFakeSponsor = true;
     }
+}
 
-    if (!sponsorExists) return res.status(400).json({ message: 'Invalid Sponsor ID.' });
+// 2. DummyTransaction collection check
+if (!sponsorExists) {
+    const DummyTransaction = require("../models/DummyTransaction");
 
-    if (!isFakeSponsor && sponsorExists.isSponsorDeactivated) {
-        return res.status(403).json({ message: 'Policy violation: The provided sponsor link is invalid or deactivated.' });    
+    const dummySponsor = await DummyTransaction.findOne({
+        generatedId: actualSponsorId,
+        type: "Withdrawal",
+        displayName: { $exists: true, $ne: "" }
+    }).sort({ createdAt: -1 });
+
+    if (dummySponsor) {
+        sponsorExists = {
+            userId: dummySponsor.generatedId,
+            name: dummySponsor.displayName,
+            isSponsorDeactivated: false
+        };
+
+        isFakeSponsor = true;
+
+        console.log(
+            `[DUMMY SPONSOR FOUND] ID: ${dummySponsor.generatedId}, Name: ${dummySponsor.displayName}`
+        );
     }
+}
 
-    // ✨ Fake Sponsor Logic
-    if (isFakeSponsor) {
-        const SYSTEM_TOP_ID = 5204198; 
-        const topUser = await User.findOne({ userId: SYSTEM_TOP_ID }); 
-        if (topUser) {
-            actualSponsorId = topUser.userId; 
-            console.log(`[SYSTEM ATTACH] Fake Sponsor (${sponsorId}) used. Redirecting to Top Earning ID: ${topUser.userId}`);
-        } else {
-            console.log(`⚠️ WARNING: Top ID ${SYSTEM_TOP_ID} not found in database!`);
-        }
+// 3. Invalid sponsor check
+if (!sponsorExists) {
+    return res.status(400).json({
+        message: 'Invalid Sponsor ID.'
+    });
+}
+
+// 4. Existing deactivation check
+if (!isFakeSponsor && sponsorExists.isSponsorDeactivated) {
+    return res.status(403).json({
+        message: 'Policy violation: The provided sponsor link is invalid or deactivated.'
+    });
+}
+
+// 5. Existing Fake Sponsor system attachment
+if (isFakeSponsor) {
+    const SYSTEM_TOP_ID = 5204198;
+
+    const topUser = await User.findOne({
+        userId: SYSTEM_TOP_ID
+    });
+
+    if (topUser) {
+        actualSponsorId = topUser.userId;
+
+        console.log(
+            `[SYSTEM ATTACH] Fake/Dummy Sponsor (${sponsorId}) used. Redirecting to Top Earning ID: ${topUser.userId}`
+        );
+    } else {
+        console.log(
+            `WARNING: Top ID ${SYSTEM_TOP_ID} not found in database!`
+        );
     }
+}
+
 
     // ✨ Unique ID Generator
     let newUserId;

@@ -4602,39 +4602,118 @@ router.get("/downline-business/:userId", async (req, res) => {
 
 // routes/user.js
 // ✅ UPDATED: Sponsor Name Fetch (Dono tables check karega)
+// router.get('/sponsor-name/:id', async (req, res) => {
+//   try {
+//     const id = Number(req.params.id);
+
+//     // 1. Pehle 'User' (Real) collection mein dhoondo
+//     // Sirf 'name' select kar rahe hain taaki query fast ho
+//     let sponsor = await User.findOne({ userId: id }).select('name');
+
+//     // 2. 🔥 Agar Real mein nahi mila, toh 'FakeUser' table mein check karo
+//     if (!sponsor) {
+//       // Ensure karna ki FakeUser model upar require/import kiya hua hai
+//       if (typeof FakeUser !== 'undefined') {
+//         sponsor = await FakeUser.findOne({ userId: id }).select('name');
+//       } else if (typeof DummyUser !== 'undefined') {
+//         // Fallback agar galti se purana model use ho raha ho
+//         sponsor = await DummyUser.findOne({ userId: id }).select('name');
+//       }
+//     }
+
+//     // 3. Agar dono jagah nahi mila toh 404
+//     if (!sponsor) {
+//       return res.status(404).json({ message: 'Sponsor not found' });
+//     }
+
+//     // 4. Sirf naam bhej do (Frontend isi ka intezaar kar raha hai)
+//     res.json({ name: sponsor.name });
+
+//   } catch (err) {
+//     console.error("Sponsor Name Fetch Error:", err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
+
+
+
 router.get('/sponsor-name/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
 
-    // 1. Pehle 'User' (Real) collection mein dhoondo
-    // Sirf 'name' select kar rahe hain taaki query fast ho
-    let sponsor = await User.findOne({ userId: id }).select('name');
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(400).json({
+        message: 'Invalid Sponsor ID'
+      });
+    }
 
-    // 2. 🔥 Agar Real mein nahi mila, toh 'FakeUser' table mein check karo
+    // 1. Pehle Real User collection mein search
+    let sponsor = await User.findOne({
+      userId: id
+    }).select('name');
+
+    // 2. Agar Real User mein nahi mila, FakeUser mein check
     if (!sponsor) {
-      // Ensure karna ki FakeUser model upar require/import kiya hua hai
       if (typeof FakeUser !== 'undefined') {
-        sponsor = await FakeUser.findOne({ userId: id }).select('name');
+        sponsor = await FakeUser.findOne({
+          userId: id
+        }).select('name');
       } else if (typeof DummyUser !== 'undefined') {
-        // Fallback agar galti se purana model use ho raha ho
-        sponsor = await DummyUser.findOne({ userId: id }).select('name');
+        sponsor = await DummyUser.findOne({
+          userId: id
+        }).select('name');
       }
     }
 
-    // 3. Agar dono jagah nahi mila toh 404
+    // 3. Agar FakeUser mein bhi nahi mila,
+    // DummyTransaction collection mein generatedId check
     if (!sponsor) {
-      return res.status(404).json({ message: 'Sponsor not found' });
+      const DummyTransaction = require(
+        '../models/DummyTransaction'
+      );
+
+      const dummySponsor = await DummyTransaction.findOne({
+        generatedId: id,
+        type: 'Withdrawal',
+        displayName: {
+          $exists: true,
+          $ne: ''
+        }
+      })
+      .sort({ createdAt: -1 })
+      .select('generatedId displayName');
+
+      if (dummySponsor) {
+        sponsor = {
+          userId: dummySponsor.generatedId,
+          name: dummySponsor.displayName
+        };
+      }
     }
 
-    // 4. Sirf naam bhej do (Frontend isi ka intezaar kar raha hai)
-    res.json({ name: sponsor.name });
+    // 4. Kisi bhi collection mein nahi mila
+    if (!sponsor) {
+      return res.status(404).json({
+        message: 'Sponsor not found'
+      });
+    }
+
+    // 5. Frontend ko name aur ID return
+    return res.json({
+      success: true,
+      valid: true,
+      userId: sponsor.userId || id,
+      name: sponsor.name
+    });
 
   } catch (err) {
-    console.error("Sponsor Name Fetch Error:", err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Sponsor Name Fetch Error:', err);
+
+    return res.status(500).json({
+      message: 'Server error'
+    });
   }
 });
-
 
 // ==========================================
 // ✅ GET REWARD PROGRESS STATS API

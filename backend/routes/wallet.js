@@ -1475,44 +1475,294 @@ if (String(user.role).toLowerCase() === "leader") {
 });
 
 
+// router.post("/promo-withdraw", authMiddleware, async (req, res) => {
+//   try {
+//     const {
+//       items,
+//       transactionPassword,
+//       dryRun = false
+//     } = req.body;
+
+//     const currentUser = await User.findOne({
+//       userId: req.user.userId
+//     });
+
+//     if (!currentUser) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // Role Security Check
+//     if (String(currentUser.role || "").toLowerCase() !== "promo") {
+//       return res.status(403).json({
+//         message: "Unauthorized: For promo users only."
+//       });
+//     }
+
+//     // Transaction Password Check
+//     if (
+//       typeof transactionPassword !== "string" ||
+//       typeof currentUser.transactionPassword !== "string" ||
+//       transactionPassword.toLowerCase() !==
+//         currentUser.transactionPassword.toLowerCase()
+//     ) {
+//       return res.status(403).json({
+//         message: "Invalid Transaction Password."
+//       });
+//     }
+
+//     // Withdrawal Amount Calculation
+//     if (!Array.isArray(items) || items.length === 0) {
+//       return res.status(400).json({
+//         message: "Please select a withdrawal amount."
+//       });
+//     }
+
+//     let totalAmt = 0;
+
+//     for (const item of items) {
+//       const amount = Number(item.amount);
+
+//       if (!Number.isFinite(amount) || amount <= 0) {
+//         return res.status(400).json({
+//           message: "Invalid withdrawal amount."
+//         });
+//       }
+
+//       totalAmt += Math.floor(amount);
+//     }
+
+//     // Minimum $10
+//     if (totalAmt < 10) {
+//       return res.status(400).json({
+//         message: "Minimum withdrawal amount is $10."
+//       });
+//     }
+
+//     // Maximum $1000
+//     if (totalAmt > 1000) {
+//       return res.status(400).json({
+//         message: "Maximum withdrawal amount is $1000."
+//       });
+//     }
+
+//     // Multiples of $10
+//     if (totalAmt % 10 !== 0) {
+//       return res.status(400).json({
+//         message: "Withdrawal amount must be in multiples of $10."
+//       });
+//     }
+
+//     // ==========================================
+//     // 2. 🔥 90% ARRAY / 10% DATABASE LOGIC
+//     // ==========================================
+//     const indianNames = [
+    
+//     ];
+
+//     let randomName = "";
+//     let randomFakeId = "";
+
+//     // 🎲 90% ARRAY / 10% DATABASE LOGIC
+//     const chance = Math.random() * 100;
+
+//     if (chance <= 90) {
+//       // 90%: Random name and ID
+//       randomName =
+//         indianNames[Math.floor(Math.random() * indianNames.length)];
+
+//       randomFakeId = Math.floor(1000000 + Math.random() * 9000000);
+//     } else {
+//       // 10%: FakeUser database se 3 din purana user
+//       const FakeUser = require("../models/FakeUser");
+
+//       const threeDaysAgo = new Date();
+//       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+//       const fakeUsers = await FakeUser.aggregate([
+//         { $match: { date: { $lte: threeDaysAgo } } },
+//         { $sample: { size: 1 } }
+//       ]);
+
+//       if (fakeUsers && fakeUsers.length > 0) {
+//         randomName = fakeUsers[0].name;
+//         randomFakeId = fakeUsers[0].userId;
+//       } else {
+//         // Fallback
+//         randomName =
+//           indianNames[Math.floor(Math.random() * indianNames.length)];
+
+//         randomFakeId = Math.floor(1000000 + Math.random() * 9000000);
+//       }
+//     }
+
+//     // ==========================================
+//     // 3. WITHDRAWAL REPORT
+//     // ==========================================
+
+//     const totalFee = totalAmt * 0.10;
+//     const netAmountAfterFee = totalAmt - totalFee;
+
+//     const finalReport = {
+//       totalRequested: totalAmt,
+//       totalFeeDeducted: totalFee,
+//       totalNetUSDT: netAmountAfterFee,
+//       totalToTopupWallet: 0,
+//       teamSizeTracked: 1000,
+//       communityPercentage: 100
+//     };
+
+//     // ==========================================
+//     // 4. DRY RUN - PREVIEW ONLY
+//     // ==========================================
+
+//     if (dryRun === true) {
+//       return res.json({
+//         success: true,
+//         dryRun: true,
+//         generatedId: randomFakeId,
+//         name: randomName,
+//         message: `Demo withdrawal preview of $${totalAmt}.`,
+//         report: finalReport
+//       });
+//     }
+
+//     // ==========================================
+//     // 5. CONFIRMED DEMO WITHDRAWAL
+//     // ==========================================
+
+//     const DummyTransaction = require("../models/DummyTransaction");
+
+//     await DummyTransaction.create({
+//       userId: currentUser.userId,
+//       generatedId: randomFakeId,
+//       amount: totalAmt,
+//       type: "Withdrawal",
+//       description: `DEMO withdrawal of $${totalAmt} for promo ID ${randomFakeId}`,
+//       date: new Date()
+//     });
+
+//     // ==========================================
+//     // 6. SUCCESS RESPONSE
+//     // ==========================================
+
+//     return res.json({
+//       success: true,
+//       dryRun: false,
+//       generatedId: randomFakeId,
+//       name: randomName,
+//       message: `Demo withdrawal of $${totalAmt} recorded successfully.`,
+//       report: finalReport
+//     });
+
+//   } catch (err) {
+//     console.error("Promo Withdraw Simulation Error:", err);
+
+//     return res.status(500).json({
+//       message: "Server processing error: " + err.message
+//     });
+//   }
+// });
+// ---------------------------
+// INSTANT WITHDRAW ROUTE
+// For direct, level, spin only with fee
+// Atomic and race-condition safe
+// ---------------------------
+ 
+
 router.post("/promo-withdraw", authMiddleware, async (req, res) => {
   try {
-    const { items, transactionPassword } = req.body;
+    const {
+      items,
+      transactionPassword,
+      dryRun = false
+    } = req.body;
 
-    const currentUser = await User.findOne({ userId: req.user.userId });
-    if (!currentUser) return res.status(404).json({ message: "User not found" });
+    // ==========================================
+    // 1. AUTHENTICATED USER
+    // ==========================================
 
-    // 🛡️ Role Security Check
-    if (currentUser.role !== "promo") {
-      return res.status(403).json({ message: "Unauthorized: For promo users only." });
-    }
+    const currentUser = await User.findOne({
+      userId: req.user.userId
+    });
 
-    // 1. Password Check
-    const isPasswordValid = (transactionPassword.toLowerCase() === currentUser.transactionPassword.toLowerCase());
-    if (!isPasswordValid) return res.status(403).json({ message: "Invalid Transaction Password." });
-
-    // 💰 Calculation
-    let totalAmt = 0;
-    if (items && Array.isArray(items)) {
-      items.forEach(item => {
-        totalAmt += Math.floor(parseFloat(item.amount) || 0);
+    if (!currentUser) {
+      return res.status(404).json({
+        message: "User not found"
       });
     }
 
-    // 🔥 Minimum 10 and Multiples of 10 Check
-    if (totalAmt < 10) {
-      return res.status(400).json({ message: "Minimum withdrawal amount is $10." });
-    }
-    
-    if (totalAmt % 10 !== 0) {
-      return res.status(400).json({ message: "Withdrawal amount must be in multiples of $10 (e.g., 10, 20, 30...)." });
+    // Only promo users
+    if (
+      String(currentUser.role || "").toLowerCase() !== "promo"
+    ) {
+      return res.status(403).json({
+        message: "Unauthorized: For promo users only."
+      });
     }
 
     // ==========================================
-    // 2. 🔥 90% ARRAY / 10% DATABASE LOGIC
+    // 2. TRANSACTION PASSWORD
     // ==========================================
-    const indianNames = [
-      "Aarav Patil", "Rohan Sharma", "Aditya Singh", "Rahul Verma", "Vikas Yadav", "Amit Kumar", "Ankit Gupta",
+
+    if (
+      typeof transactionPassword !== "string" ||
+      typeof currentUser.transactionPassword !== "string" ||
+      transactionPassword.toLowerCase() !==
+        currentUser.transactionPassword.toLowerCase()
+    ) {
+      return res.status(403).json({
+        message: "Invalid Transaction Password."
+      });
+    }
+
+    // ==========================================
+    // 3. WITHDRAWAL AMOUNT VALIDATION
+    // ==========================================
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        message: "Please select a withdrawal amount."
+      });
+    }
+
+    let totalAmt = 0;
+
+    for (const item of items) {
+      const amount = Number(item.amount);
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({
+          message: "Invalid withdrawal amount."
+        });
+      }
+
+      totalAmt += Math.floor(amount);
+    }
+
+    if (totalAmt < 10) {
+      return res.status(400).json({
+        message: "Minimum withdrawal amount is $10."
+      });
+    }
+
+    if (totalAmt > 1000) {
+      return res.status(400).json({
+        message: "Maximum withdrawal amount is $1000."
+      });
+    }
+
+    if (totalAmt % 10 !== 0) {
+      return res.status(400).json({
+        message: "Withdrawal amount must be in multiples of $10."
+      });
+    }
+
+    // ==========================================
+    // 4. RANDOM DEMO NAME AND 7-DIGIT ID
+    // ==========================================
+
+    const demoNames = [
+       "Aarav Patil", "Rohan Sharma", "Aditya Singh", "Rahul Verma", "Vikas Yadav", "Amit Kumar", "Ankit Gupta",
       "Sandeep Mishra", "Vivek Tiwari", "Rajesh Patel", "Mohit Sharma", "Ravi Yadav", "Akash Singh", "Deepak Verma",
       "Pankaj Kumar", "Nitin Sharma", "Karan Malhotra", "Saurabh Gupta", "Abhishek Jain", "Manish Patel", "Harsh Mehta",
       "Yash Shah", "Dhruv Patel", "Jay Mehta", "Meet Shah", "Kunal Joshi", "Rakesh Solanki", "Pravin Chauhan",
@@ -1557,101 +1807,106 @@ router.post("/promo-withdraw", authMiddleware, async (req, res) => {
       "Siya Oberoi", "Meher Juneja", "Aarohi Sethi", "Shanaya Mehra", "Aarav Deshmukh"
     ];
 
-let randomName = "";
-    let randomFakeId = "";
+    const randomName =
+      demoNames[
+        Math.floor(Math.random() * demoNames.length)
+      ];
 
-    // 🎲 0 se 100 ke beech ek random number
-    const chance = Math.random() * 100;
+    // Exactly 7 digits
+    const randomFakeId = Math.floor(
+      1000000 + Math.random() * 9000000
+    );
 
-    if (chance <= 90) {
-      // 90% CHANCE: List se uthao aur naya ID banao
-      // Make sure 'indianNames' array is defined above this route in your file!
-      randomName = indianNames[Math.floor(Math.random() * indianNames.length)];
-      randomFakeId = Math.floor(1000000 + Math.random() * 9000000);
-    } else {
-      // 10% CHANCE: 3-din purana FakeUser Database se uthao
-      const FakeUser = require('../models/FakeUser');
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    // ==========================================
+    // 5. WITHDRAWAL REPORT
+    // ==========================================
 
-      const fakeUsers = await FakeUser.aggregate([
-        { $match: { date: { $lte: threeDaysAgo } } },
-        { $sample: { size: 1 } }
-      ]);
+    const totalFee = Number((totalAmt * 0.10).toFixed(2));
 
-      if (fakeUsers && fakeUsers.length > 0) {
-        randomName = fakeUsers[0].name;
-        randomFakeId = fakeUsers[0].userId;
-      } else {
-        // Fallback
-        randomName = indianNames[Math.floor(Math.random() * indianNames.length)];
-        randomFakeId = Math.floor(1000000 + Math.random() * 9000000);
-      }
+    const netAmountAfterFee = Number(
+      (totalAmt - totalFee).toFixed(2)
+    );
+
+    const finalReport = {
+      totalRequested: totalAmt,
+      totalFeeDeducted: totalFee,
+      totalNetUSDT: netAmountAfterFee,
+      totalToTopupWallet: 0,
+      teamSizeTracked: 1000,
+      communityPercentage: 100
+    };
+
+    // ==========================================
+    // 6. DRY RUN - PREVIEW ONLY
+    // ==========================================
+
+    if (dryRun === true) {
+      return res.json({
+        success: true,
+        demo: true,
+        dryRun: true,
+
+        generatedId: randomFakeId,
+        displayName: randomName,
+
+        message: `DEMO withdrawal preview of $${totalAmt}.`,
+
+        report: finalReport
+      });
     }
 
     // ==========================================
-    // 3. RECORD IN DUMMY TRANSACTION
+    // 7. SAVE DEMO WITHDRAWAL
     // ==========================================
-    const DummyTransaction = require('../models/DummyTransaction'); 
 
-    const fakeJoinDate = new Date();
-    fakeJoinDate.setDate(fakeJoinDate.getDate() - Math.floor(Math.random() * 5 + 1));
+    const DummyTransaction = require(
+      "../models/DummyTransaction"
+    );
 
-    // A. Pehle Fake Topup ki entry
-    await DummyTransaction.create({
-      userId: currentUser.userId,
-      generatedId: randomFakeId, 
-      amount: 30, 
-      type: "topup", 
-      description: ` Activated with $30`,
-      date: fakeJoinDate
-    });
+  await DummyTransaction.create({
+  userId: currentUser.userId,
 
-    // B. Ab Fake Withdrawal ki entry
-    await DummyTransaction.create({
-      userId: currentUser.userId,
-      generatedId: randomFakeId, 
-      amount: totalAmt, 
-      type: "Withdrawal", 
-      description: `Demo withdrawal of $${totalAmt} generated for promo ID ${randomFakeId}`,
-      date: new Date()
-    });
+  generatedId: randomFakeId,
+  displayName: randomName,
 
-    // 🔥 NAYA: Fake Report Generate karna Frontend ke Modal ke liye
-    const totalFee = totalAmt * 0.10; // 10% fee
-    const netAmountAfterFee = totalAmt - totalFee;
-    
-    // Promo ke liye hum 100% net withdraw dikha rahe hain
-    let finalReport = {
-        totalRequested: totalAmt,
-        totalFeeDeducted: totalFee,
-        totalNetUSDT: netAmountAfterFee, 
-        totalToTopupWallet: 0,
-        teamSizeTracked: 1000, 
-        communityPercentage: 100
-    };
+  amount: totalAmt,
+  type: "Withdrawal",
 
-    return res.json({ 
-      success: true, 
-      generatedId: randomFakeId, 
-      name: randomName,
-      message: `Promo withdrawal of $${totalAmt} processed. (Hidden $30 Topup also generated!)`,
-      report: finalReport // 🔥 Yahan Frontend ko Report mil jayegi!
+  description:
+    `DEMO ONLY - Simulated withdrawal of $${totalAmt}. ` +
+    `Demo ID: ${randomFakeId}. No actual USDT payout.`,
+
+  date: new Date()
+});
+    // ==========================================
+    // 8. SUCCESS RESPONSE
+    // ==========================================
+
+    return res.json({
+      success: true,
+      demo: true,
+      dryRun: false,
+
+      generatedId: randomFakeId,
+      displayName: randomName,
+
+      message:
+        `DEMO withdrawal of $${totalAmt} recorded successfully. No actual payout was made.`,
+
+      report: finalReport
     });
 
   } catch (err) {
-    console.error("Promo Withdraw Simulation Error:", err);
-    res.status(500).json({ message: "Server processing error: " + err.message });
+    console.error(
+      "Promo Withdraw Simulation Error:",
+      err
+    );
+
+    return res.status(500).json({
+      message: "Server processing error: " + err.message
+    });
   }
 });
-// ---------------------------
-// INSTANT WITHDRAW ROUTE
-// For direct, level, spin only with fee
-// Atomic and race-condition safe
-// ---------------------------
- 
-
-
 
 
 
