@@ -920,10 +920,257 @@ const PackageSubscription = require("../models/PackageSubscription");
 // ============================================================
 
 
+// async function distributePackageCommission(
+//   targetUser,
+//   packageAmount,
+//   subscriptionId,
+//     isFreeFirstPackage = false
+// ) {
+//   const amount = Number(packageAmount);
+
+//   if (!Number.isFinite(amount) || amount <= 0) {
+//     throw new Error("Invalid package amount for commission.");
+//   }
+
+//   if (!targetUser?.userId || !subscriptionId) {
+//     throw new Error("Missing targetUser or subscriptionId.");
+//   }
+
+//   const credited = [];
+
+//   try {
+//     // ======================================================
+//     // PART 1: DIRECT INCOME 25% + LEVEL INCOME
+//     // ======================================================
+
+//     let uplineId = targetUser.sponsorId;
+//     const visitedUsers = new Set();
+
+//     for (let level = 1; level <= 20 && uplineId; level++) {
+//       const currentId = String(uplineId);
+
+//       // Prevent infinite loop if sponsor chain contains a cycle.
+//       if (visitedUsers.has(currentId)) break;
+//       visitedUsers.add(currentId);
+
+//       const upline = await User.findOne({
+//         userId: Number(uplineId)
+//       }).select("userId sponsorId");
+
+//       if (!upline) break;
+
+//       const percentage =
+//         level === 1 ? 25 :
+//         level <= 10 ? 1 :
+//         0.5;
+
+//       const type =
+//         level === 1 ? "direct_income" : "level_income";
+
+//       const source =
+//         level === 1 ? "direct" : "level";
+
+//       const commission = Number(
+//         ((amount * percentage) / 100).toFixed(2)
+//       );
+
+//       const idempotencyKey =
+//         `${subscriptionId}:commission:${upline.userId}:level:${level}`;
+
+//       try {
+//         const txn = await Transaction.create({
+//           userId: upline.userId,
+//           type,
+//           source,
+//           amount: commission,
+//           package: amount,
+//           subscriptionId,
+//           fromUserId: targetUser.userId,
+//           idempotencyKey,
+//           description:
+//             level === 1
+//               ? `Direct Income 25% from ${targetUser.userId}`
+//               : `Level ${level} Income ${percentage}% from ${targetUser.userId}`,
+//           status: "completed",
+//           date: new Date()
+//         });
+
+//         const update =
+//           level === 1
+//             ? {
+//                 $inc: {
+//                   directIncome: commission,
+//                   totalDirectIncome: commission
+//                 }
+//               }
+//             : {
+//                 $inc: {
+//                   levelIncome: commission,
+//                   totalLevelIncome: commission
+//                 }
+//               };
+
+//         const result = await User.updateOne(
+//           { userId: upline.userId },
+//           update
+//         );
+
+//         if (result.matchedCount !== 1) {
+//           await Transaction.deleteOne({ _id: txn._id });
+
+//           throw new Error(
+//             `Commission balance update failed for ${upline.userId}`
+//           );
+//         }
+
+//         credited.push({
+//           transactionId: txn._id,
+//           userId: upline.userId,
+//           type,
+//           amount: commission
+//         });
+
+//         console.log(
+//           `[COMMISSION] Level ${level} | User ${upline.userId} | $${commission}`
+//         );
+
+//       } catch (err) {
+//         if (err.code === 11000) {
+//           console.log(`[DUPLICATE BLOCKED] ${idempotencyKey}`);
+//         } else {
+//           throw err;
+//         }
+//       }
+
+//       uplineId = upline.sponsorId;
+//     }
+
+//     // ======================================================
+//     // PART 2: NEAREST LEADER BONUS 10%
+//     // ======================================================
+
+//     // Confirmed exemption:
+//     // Leader's own free first $30 activation gets no 10% bonus.
+//     const isLeaderFreeFirstActivation =
+//       String(targetUser.role || "").toLowerCase() === "leader" &&
+//       amount === 30;
+
+//     if (!isLeaderFreeFirstActivation) {
+//       let leaderSearchId = targetUser.sponsorId;
+//       let nearestLeader = null;
+//       const leaderVisited = new Set();
+
+//       // Search upward and pay only the first exact "leader".
+//       while (leaderSearchId) {
+//         const currentId = String(leaderSearchId);
+
+//         if (leaderVisited.has(currentId)) break;
+//         leaderVisited.add(currentId);
+
+//         const upline = await User.findOne({
+//           userId: Number(leaderSearchId)
+//         }).select("userId sponsorId role");
+
+//         if (!upline) break;
+
+//         if (
+//           String(upline.role || "").toLowerCase() === "leader"
+//         ) {
+//           nearestLeader = upline;
+//           break;
+//         }
+
+//         // Skip normal users and continue upward.
+//         leaderSearchId = upline.sponsorId;
+//       }
+
+//       if (nearestLeader) {
+//         const leaderBonus = Number(
+//           ((amount * 10) / 100).toFixed(2)
+//         );
+
+//         const idempotencyKey =
+//           `${subscriptionId}:nearest-leader:${nearestLeader.userId}`;
+
+//         try {
+//           // Create transaction first to prevent duplicate credit.
+//         const txn = await Transaction.create({
+//   userId: nearestLeader.userId,
+//   type: "leader_income",
+//   source: "nearest_leader",
+//   amount: mongoose.Types.Decimal128.fromString(
+//     leaderBonus.toFixed(2)
+//   ),
+//   package: amount,
+//   subscriptionId,
+//   fromUserId: targetUser.userId,
+//   idempotencyKey,
+//   description: `Nearest Leader Bonus 10% from user ${targetUser.userId}`,
+//   status: "completed",
+//   date: new Date()
+// });
+
+//           // IMPORTANT: 10% goes directly to walletBalance.
+//           const result = await User.updateOne(
+//             { userId: nearestLeader.userId },
+//             {
+//               $inc: {
+//                 walletBalance: leaderBonus
+//               }
+//             }
+//           );
+
+//           if (result.matchedCount !== 1) {
+//             await Transaction.deleteOne({ _id: txn._id });
+
+//             throw new Error(
+//               `Leader wallet update failed for ${nearestLeader.userId}`
+//             );
+//           }
+
+//           credited.push({
+//             transactionId: txn._id,
+//             userId: nearestLeader.userId,
+//             type: "leader_income",
+//             amount: leaderBonus
+//           });
+
+//           console.log(
+//             `[NEAREST LEADER] Leader ${nearestLeader.userId} | Wallet +$${leaderBonus}`
+//           );
+
+//         } catch (err) {
+//           if (err.code === 11000) {
+//             console.log(`[DUPLICATE BLOCKED] ${idempotencyKey}`);
+//           } else {
+//             throw err;
+//           }
+//         }
+//       } else {
+//         console.log(
+//           `[NEAREST LEADER] No leader found for user ${targetUser.userId}`
+//         );
+//       }
+//     } else {
+//       console.log(
+//         `[NEAREST LEADER] Free first $30 leader activation exempted for ${targetUser.userId}`
+//       );
+//     }
+
+//     return credited;
+
+//   } catch (err) {
+//     await rollbackPackageCommission(credited);
+//     throw err;
+//   }
+// }
+
+
 async function distributePackageCommission(
   targetUser,
   packageAmount,
-  subscriptionId
+  subscriptionId,
+  isFreeFirstPackage = false
 ) {
   const amount = Number(packageAmount);
 
@@ -940,6 +1187,7 @@ async function distributePackageCommission(
   try {
     // ======================================================
     // PART 1: DIRECT INCOME 25% + LEVEL INCOME
+    // Always runs, including free first $30 package.
     // ======================================================
 
     let uplineId = targetUser.sponsorId;
@@ -1046,15 +1294,10 @@ async function distributePackageCommission(
 
     // ======================================================
     // PART 2: NEAREST LEADER BONUS 10%
+    // Skip ONLY when this is a free first package.
     // ======================================================
 
-    // Confirmed exemption:
-    // Leader's own free first $30 activation gets no 10% bonus.
-    const isLeaderFreeFirstActivation =
-      String(targetUser.role || "").toLowerCase() === "leader" &&
-      amount === 30;
-
-    if (!isLeaderFreeFirstActivation) {
+    if (!isFreeFirstPackage) {
       let leaderSearchId = targetUser.sponsorId;
       let nearestLeader = null;
       const leaderVisited = new Set();
@@ -1093,23 +1336,23 @@ async function distributePackageCommission(
 
         try {
           // Create transaction first to prevent duplicate credit.
-        const txn = await Transaction.create({
-  userId: nearestLeader.userId,
-  type: "leader_income",
-  source: "nearest_leader",
-  amount: mongoose.Types.Decimal128.fromString(
-    leaderBonus.toFixed(2)
-  ),
-  package: amount,
-  subscriptionId,
-  fromUserId: targetUser.userId,
-  idempotencyKey,
-  description: `Nearest Leader Bonus 10% from user ${targetUser.userId}`,
-  status: "completed",
-  date: new Date()
-});
+          const txn = await Transaction.create({
+            userId: nearestLeader.userId,
+            type: "leader_income",
+            source: "nearest_leader",
+            amount: mongoose.Types.Decimal128.fromString(
+              leaderBonus.toFixed(2)
+            ),
+            package: amount,
+            subscriptionId,
+            fromUserId: targetUser.userId,
+            idempotencyKey,
+            description: `Nearest Leader Bonus 10% from user ${targetUser.userId}`,
+            status: "completed",
+            date: new Date()
+          });
 
-          // IMPORTANT: 10% goes directly to walletBalance.
+          // 10% goes directly to walletBalance.
           const result = await User.updateOne(
             { userId: nearestLeader.userId },
             {
@@ -1150,9 +1393,10 @@ async function distributePackageCommission(
           `[NEAREST LEADER] No leader found for user ${targetUser.userId}`
         );
       }
+
     } else {
       console.log(
-        `[NEAREST LEADER] Free first $30 leader activation exempted for ${targetUser.userId}`
+        `[NEAREST LEADER] Free first package: 10% bonus skipped for user ${targetUser.userId}`
       );
     }
 
@@ -1163,6 +1407,7 @@ async function distributePackageCommission(
     throw err;
   }
 }
+
 
 
 // ============================================================
@@ -2785,11 +3030,17 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
     // COMMISSION DISTRIBUTION
     // --------------------------------------------------------
 
-    commissionCredits = await distributePackageCommission(
-      targetUser,
-      amount,
-      subscription._id
-    );
+    // commissionCredits = await distributePackageCommission(
+    //   targetUser,
+    //   amount,
+    //   subscription._id
+    // );
+commissionCredits = await distributePackageCommission(
+  targetUser,
+  amount,
+  subscription._id,
+  isFreeFirstPackage
+);
 
     // Save first successful top-up only for Royalty timer
 // Save first successful top-up only for Royalty timer
