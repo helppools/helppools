@@ -4168,56 +4168,176 @@ router.put('/withdrawals/reject/:id', verifyAdmin, async (req, res) => {
 // 1. 🔥 LEADER LIST FETCH KARNE KI API
 // 1. 🔥 LEADER LIST FETCH KARNE KI API
 // 1. 🔥 LEADER WITHDRAWAL LIST API (Updated with Dynamic Math)
+// router.get('/leader-withdrawal-list', verifyAdmin, async (req, res) => {
+//     try {
+//         const leaders = await User.find(
+//             { role: 'leader' }, 
+//             'userId name walletBalance directIncome levelIncome rewardIncome poolIncome walletAddress activePools'
+//         ).lean();
+        
+//         const leaderData = leaders.map(user => {
+            
+//             // 🔥 JADOO YAHAN HAI: Admin ab user ki tarah live calculate karega
+//             let dynamicPoolIncome = 0;
+//             if (user.activePools && user.activePools.length > 0) {
+//                 for (let pool of user.activePools) {
+//                     let earned = (pool.daysPaid || 0) * (pool.dailyAmount || 0);
+//                     let available = earned - (pool.withdrawnAmount || 0);
+//                     if (available > 0) {
+//                         dynamicPoolIncome += available;
+//                     }
+//                 }
+//             }
+
+//             // 🔥 RULE: Fast Track aur Wallet Balance isme JUDEGA NAHI
+//             const totalIncome = 
+//                 (user.directIncome || 0) + 
+//                 (user.levelIncome || 0) + 
+//                 (user.rewardIncome || 0) + 
+//                 dynamicPoolIncome; // Purane user.poolIncome ki jagah naya live total
+            
+//             const eligibleWithdrawal = Math.floor(totalIncome / 10) * 10; // Sirf 10 ke multiples
+            
+//             return {
+//                 userId: user.userId,
+//                 name: user.name,
+//                 walletBalance: user.walletBalance || 0,
+//                 totalIncome: totalIncome,
+//                 eligibleWithdrawal: eligibleWithdrawal,
+//                 remainingAfter: totalIncome - eligibleWithdrawal,
+//                 walletAddress: user.walletAddress || "Not Set"
+//             };
+//         });
+
+//         // Jinka balance sabse zyada hai wo upar aayenge
+//         leaderData.sort((a, b) => b.totalIncome - a.totalIncome);
+
+//         res.json({ success: true, data: leaderData });
+//     } catch (error) {
+//         console.error("Leader List Error:", error);
+//         res.status(500).json({ success: false, message: "Failed to fetch leaders." });
+//     }
+// });
+
+
+
+
 router.get('/leader-withdrawal-list', verifyAdmin, async (req, res) => {
     try {
         const leaders = await User.find(
-            { role: 'leader' }, 
+            { role: 'leader' },
             'userId name walletBalance directIncome levelIncome rewardIncome poolIncome walletAddress activePools'
         ).lean();
-        
-        const leaderData = leaders.map(user => {
-            
-            // 🔥 JADOO YAHAN HAI: Admin ab user ki tarah live calculate karega
-            let dynamicPoolIncome = 0;
-            if (user.activePools && user.activePools.length > 0) {
-                for (let pool of user.activePools) {
-                    let earned = (pool.daysPaid || 0) * (pool.dailyAmount || 0);
-                    let available = earned - (pool.withdrawnAmount || 0);
-                    if (available > 0) {
-                        dynamicPoolIncome += available;
-                    }
+
+        const toCents = (value) => {
+            const amount = Number(value || 0);
+
+            return Number.isFinite(amount)
+                ? Math.max(0, Math.round(amount * 100))
+                : 0;
+        };
+
+        const leaderData = leaders.map((user) => {
+
+            // Calculate live available pool income
+            let dynamicPoolIncomeCents = 0;
+
+            if (Array.isArray(user.activePools)) {
+                for (const pool of user.activePools) {
+                    const daysPaid = Math.max(0, Number(pool.daysPaid || 0));
+                    const dailyAmount = Math.max(0, Number(pool.dailyAmount || 0));
+                    const withdrawnAmount = Math.max(0, Number(pool.withdrawnAmount || 0));
+
+                    const earnedCents = toCents(daysPaid * dailyAmount);
+                    const withdrawnCents = toCents(withdrawnAmount);
+
+                    dynamicPoolIncomeCents += Math.max(
+                        0,
+                        earnedCents - withdrawnCents
+                    );
                 }
             }
 
-            // 🔥 RULE: Fast Track aur Wallet Balance isme JUDEGA NAHI
-            const totalIncome = 
-                (user.directIncome || 0) + 
-                (user.levelIncome || 0) + 
-                (user.rewardIncome || 0) + 
-                dynamicPoolIncome; // Purane user.poolIncome ki jagah naya live total
-            
-            const eligibleWithdrawal = Math.floor(totalIncome / 10) * 10; // Sirf 10 ke multiples
-            
+            // Eligible income sources
+            const directIncomeCents = toCents(user.directIncome);
+            const levelIncomeCents = toCents(user.levelIncome);
+            const rewardIncomeCents = toCents(user.rewardIncome);
+
+            const totalIncomeCents =
+                directIncomeCents +
+                levelIncomeCents +
+                rewardIncomeCents +
+                dynamicPoolIncomeCents;
+
+            // Gross withdrawal: maximum multiples of $10
+            const grossWithdrawalCents =
+                Math.floor(totalIncomeCents / 1000) * 1000;
+
+            // Same 10% fee calculation as execution route
+            const feeCents = Math.round(
+                grossWithdrawalCents * 10 / 100
+            );
+
+            // Full 90% goes to withdrawal; nothing to wallet
+            const netWithdrawalCents =
+                grossWithdrawalCents - feeCents;
+
+            // Income remaining after gross deduction
+            const remainingCents =
+                totalIncomeCents - grossWithdrawalCents;
+
             return {
                 userId: user.userId,
-                name: user.name,
-                walletBalance: user.walletBalance || 0,
-                totalIncome: totalIncome,
-                eligibleWithdrawal: eligibleWithdrawal,
-                remainingAfter: totalIncome - eligibleWithdrawal,
-                walletAddress: user.walletAddress || "Not Set"
+                name: user.name || 'Unknown',
+
+                walletBalance: Number(user.walletBalance || 0),
+                walletAddress: user.walletAddress || 'Not Set',
+
+                directIncome: directIncomeCents / 100,
+                levelIncome: levelIncomeCents / 100,
+                rewardIncome: rewardIncomeCents / 100,
+                poolIncome: dynamicPoolIncomeCents / 100,
+
+                totalIncome: totalIncomeCents / 100,
+
+                // Gross amount deducted from income
+                eligibleWithdrawal: grossWithdrawalCents / 100,
+
+                // Fee and actual net withdrawal
+                withdrawalFee: feeCents / 100,
+                netWithdrawal: netWithdrawalCents / 100,
+
+                // Wallet receives nothing
+                walletCredit: 0,
+
+                remainingAfter: remainingCents / 100
             };
         });
 
-        // Jinka balance sabse zyada hai wo upar aayenge
-        leaderData.sort((a, b) => b.totalIncome - a.totalIncome);
+        // Highest net withdrawal first
+        leaderData.sort(
+            (a, b) =>
+                b.netWithdrawal - a.netWithdrawal ||
+                b.totalIncome - a.totalIncome
+        );
 
-        res.json({ success: true, data: leaderData });
+        return res.json({
+            success: true,
+            feePercentage: 10,
+            walletCredit: 0,
+            data: leaderData
+        });
+
     } catch (error) {
-        console.error("Leader List Error:", error);
-        res.status(500).json({ success: false, message: "Failed to fetch leaders." });
+        console.error('Leader List Error:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch leaders.'
+        });
     }
 });
+
 
 
 // 🔥 Yahan authMiddleware ki jagah verifyAdmin laga diya gaya hai
@@ -4314,132 +4434,405 @@ router.get('/all-users-level-reports', verifyAdmin, async (req, res) => {
 
 
 // 2. 🔥 LEADER AUTO-WITHDRAWAL EXECUTE API (Updated with Dynamic Math)
-router.post('/execute-leader-withdrawal/:userId', verifyAdmin, async (req, res) => {
-    try {
-        const leaderId = Number(req.params.userId);
-        const user = await User.findOne({ userId: leaderId, role: 'leader' });
+// router.post('/execute-leader-withdrawal/:userId', verifyAdmin, async (req, res) => {
+//     try {
+//         const leaderId = Number(req.params.userId);
+//         const user = await User.findOne({ userId: leaderId, role: 'leader' });
 
-        if (!user) return res.status(404).json({ success: false, message: "Leader not found." });
+//         if (!user) return res.status(404).json({ success: false, message: "Leader not found." });
 
-        // 🔥 Live calculate Pool Income for execute as well
-        let dynamicPoolIncome = 0;
-        if (user.activePools && user.activePools.length > 0) {
-            for (let pool of user.activePools) {
-                let earned = (pool.daysPaid || 0) * (pool.dailyAmount || 0);
-                let available = earned - (pool.withdrawnAmount || 0);
-                if (available > 0) {
-                    dynamicPoolIncome += available;
-                }
-            }
-        }
+//         // 🔥 Live calculate Pool Income for execute as well
+//         let dynamicPoolIncome = 0;
+//         if (user.activePools && user.activePools.length > 0) {
+//             for (let pool of user.activePools) {
+//                 let earned = (pool.daysPaid || 0) * (pool.dailyAmount || 0);
+//                 let available = earned - (pool.withdrawnAmount || 0);
+//                 if (available > 0) {
+//                     dynamicPoolIncome += available;
+//                 }
+//             }
+//         }
 
-        // 🔥 RULE: SIRF 4 INCOMES KA TOTAL (Wallet Balance & Fast Track excluded)
-        const dInc = user.directIncome || 0;
-        const lInc = user.levelIncome || 0;
-        const rInc = user.rewardIncome || 0;
-        const pInc = dynamicPoolIncome; // Use dynamic pool income
+//         // 🔥 RULE: SIRF 4 INCOMES KA TOTAL (Wallet Balance & Fast Track excluded)
+//         const dInc = user.directIncome || 0;
+//         const lInc = user.levelIncome || 0;
+//         const rInc = user.rewardIncome || 0;
+//         const pInc = dynamicPoolIncome; // Use dynamic pool income
 
-        const totalIncome = dInc + lInc + rInc + pInc;
-        const eligibleAmt = Math.floor(totalIncome / 10) * 10; 
+//         const totalIncome = dInc + lInc + rInc + pInc;
+//         const eligibleAmt = Math.floor(totalIncome / 10) * 10; 
         
-        if (eligibleAmt < 10) {
-            return res.status(400).json({ success: false, message: "Income balance is less than $10. Cannot withdraw." });
-        }
+//         if (eligibleAmt < 10) {
+//             return res.status(400).json({ success: false, message: "Income balance is less than $10. Cannot withdraw." });
+//         }
 
-        let remainingToDeduct = eligibleAmt;
-        const deductions = { direct: 0, level: 0, reward: 0, pool: 0 };
+//         let remainingToDeduct = eligibleAmt;
+//         const deductions = { direct: 0, level: 0, reward: 0, pool: 0 };
 
-        // 🧠 Logic: Income boxes se deduction
-        if (user.directIncome > 0 && remainingToDeduct > 0) {
-            let amt = Math.min(user.directIncome, remainingToDeduct);
-            deductions.direct = amt;
-            user.directIncome -= amt;
-            remainingToDeduct -= amt;
-        }
-        if (user.levelIncome > 0 && remainingToDeduct > 0) {
-            let amt = Math.min(user.levelIncome, remainingToDeduct);
-            deductions.level = amt;
-            user.levelIncome -= amt;
-            remainingToDeduct -= amt;
-        }
-        if (user.rewardIncome > 0 && remainingToDeduct > 0) {
-            let amt = Math.min(user.rewardIncome, remainingToDeduct);
-            deductions.reward = amt;
-            user.rewardIncome -= amt;
-            remainingToDeduct -= amt;
-        }
-        if (dynamicPoolIncome > 0 && remainingToDeduct > 0) {
-            let amt = Math.min(dynamicPoolIncome, remainingToDeduct);
-            deductions.pool = amt;
-            user.poolIncome = Math.max(0, (user.poolIncome || 0) - amt); // Sync master wallet
-            remainingToDeduct -= amt;
+//         // 🧠 Logic: Income boxes se deduction
+//         if (user.directIncome > 0 && remainingToDeduct > 0) {
+//             let amt = Math.min(user.directIncome, remainingToDeduct);
+//             deductions.direct = amt;
+//             user.directIncome -= amt;
+//             remainingToDeduct -= amt;
+//         }
+//         if (user.levelIncome > 0 && remainingToDeduct > 0) {
+//             let amt = Math.min(user.levelIncome, remainingToDeduct);
+//             deductions.level = amt;
+//             user.levelIncome -= amt;
+//             remainingToDeduct -= amt;
+//         }
+//         if (user.rewardIncome > 0 && remainingToDeduct > 0) {
+//             let amt = Math.min(user.rewardIncome, remainingToDeduct);
+//             deductions.reward = amt;
+//             user.rewardIncome -= amt;
+//             remainingToDeduct -= amt;
+//         }
+//         if (dynamicPoolIncome > 0 && remainingToDeduct > 0) {
+//             let amt = Math.min(dynamicPoolIncome, remainingToDeduct);
+//             deductions.pool = amt;
+//             user.poolIncome = Math.max(0, (user.poolIncome || 0) - amt); // Sync master wallet
+//             remainingToDeduct -= amt;
 
-            // 🔥 PRO-LOGIC: Active Pools ke andar `withdrawnAmount` set karna
-            let poolAmtToDistribute = amt;
-            if (user.activePools && user.activePools.length > 0) {
-                for (let pool of user.activePools) {
-                    if (poolAmtToDistribute <= 0) break;
+//             // 🔥 PRO-LOGIC: Active Pools ke andar `withdrawnAmount` set karna
+//             let poolAmtToDistribute = amt;
+//             if (user.activePools && user.activePools.length > 0) {
+//                 for (let pool of user.activePools) {
+//                     if (poolAmtToDistribute <= 0) break;
                     
-                    let earnedInThisPool = (pool.daysPaid || 0) * (pool.dailyAmount || 0);
-                    let availableInThisPool = earnedInThisPool - (pool.withdrawnAmount || 0);
+//                     let earnedInThisPool = (pool.daysPaid || 0) * (pool.dailyAmount || 0);
+//                     let availableInThisPool = earnedInThisPool - (pool.withdrawnAmount || 0);
 
-                    if (availableInThisPool > 0) {
-                        let deductFromPool = Math.min(availableInThisPool, poolAmtToDistribute);
-                        pool.withdrawnAmount = (pool.withdrawnAmount || 0) + deductFromPool;
-                        poolAmtToDistribute -= deductFromPool;
-                    }
-                }
+//                     if (availableInThisPool > 0) {
+//                         let deductFromPool = Math.min(availableInThisPool, poolAmtToDistribute);
+//                         pool.withdrawnAmount = (pool.withdrawnAmount || 0) + deductFromPool;
+//                         poolAmtToDistribute -= deductFromPool;
+//                     }
+//                 }
                 
-                // 🔥🔥 FIX: MARK ARRAY AS MODIFIED TO SAVE IN DB
-                user.markModified('activePools'); 
-            }
-        }
+//                 // 🔥🔥 FIX: MARK ARRAY AS MODIFIED TO SAVE IN DB
+//                 user.markModified('activePools'); 
+//             }
+//         }
 
-        const incomeSources = [
-            { name: "direct", amt: deductions.direct },
-            { name: "level", amt: deductions.level },
-            { name: "reward", amt: deductions.reward },
-            { name: "pool", amt: deductions.pool }
-        ];
+//         const incomeSources = [
+//             { name: "direct", amt: deductions.direct },
+//             { name: "level", amt: deductions.level },
+//             { name: "reward", amt: deductions.reward },
+//             { name: "pool", amt: deductions.pool }
+//         ];
 
-        const finalAddress = user.walletAddress && user.walletAddress.trim() !== "" ? user.walletAddress : "-";
+//         const finalAddress = user.walletAddress && user.walletAddress.trim() !== "" ? user.walletAddress : "-";
 
-        for (let src of incomeSources) {
-            if (src.amt > 0) {
-                const withdrawShare = src.amt * 0.50;     
-                const withdrawFee = withdrawShare * 0.10; 
-                const netWithdrawAmount = withdrawShare - withdrawFee;
+//         for (let src of incomeSources) {
+//             if (src.amt > 0) {
+//                 const withdrawShare = src.amt * 0.50;     
+//                 const withdrawFee = withdrawShare * 0.10; 
+//                 const netWithdrawAmount = withdrawShare - withdrawFee;
 
-                user.totalWithdrawn = (user.totalWithdrawn || 0) + src.amt;
+//                 user.totalWithdrawn = (user.totalWithdrawn || 0) + src.amt;
 
-                await Withdrawal.create({
-                    userId: user.userId,
-                    source: src.name,
-                    grossAmount: withdrawShare,
-                    fee: withdrawFee, 
-                    netAmount: netWithdrawAmount,
-                    walletAddress: finalAddress, 
-                    status: "approved", 
-                    date: new Date(),
-                    remarks: "Leader Auto Settlement" 
-                });
+//                 await Withdrawal.create({
+//                     userId: user.userId,
+//                     source: src.name,
+//                     grossAmount: withdrawShare,
+//                     fee: withdrawFee, 
+//                     netAmount: netWithdrawAmount,
+//                     walletAddress: finalAddress, 
+//                     status: "approved", 
+//                     date: new Date(),
+//                     remarks: "Leader Auto Settlement" 
+//                 });
 
-                await Transaction.create({
-                    userId: user.userId, type: "withdrawal", source: src.name, amount: withdrawShare,
-                    description: `Leader Settlement: Withdrawal from ${src.name.toUpperCase()}`, status: "approved"
-                });
-             }
-        }
+//                 await Transaction.create({
+//                     userId: user.userId, type: "withdrawal", source: src.name, amount: withdrawShare,
+//                     description: `Leader Settlement: Withdrawal from ${src.name.toUpperCase()}`, status: "approved"
+//                 });
+//              }
+//         }
 
-        await user.save();
+//         await user.save();
 
-        res.json({ success: true, message: `Successfully settled $${eligibleAmt} for Leader #${user.userId}` });
-    } catch (error) {
-        console.error("Execute Leader Withdraw Error:", error);
-        res.status(500).json({ success: false, message: "Server error during withdrawal." });
+//         res.json({ success: true, message: `Successfully settled $${eligibleAmt} for Leader #${user.userId}` });
+//     } catch (error) {
+//         console.error("Execute Leader Withdraw Error:", error);
+//         res.status(500).json({ success: false, message: "Server error during withdrawal." });
+//     }
+// });
+
+
+
+router.post('/execute-leader-withdrawal/:userId', verifyAdmin, async (req, res) => {
+  try {
+    const leaderId = Number(req.params.userId);
+
+    if (!Number.isSafeInteger(leaderId) || leaderId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid leader ID.'
+      });
     }
-});
 
+    const user = await User.findOne({
+      userId: leaderId,
+      role: 'leader'
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Leader not found.'
+      });
+    }
+
+    if (!user.walletAddress) {
+      return res.status(400).json({
+        success: false,
+        message: 'Leader withdrawal wallet address is not set.'
+      });
+    }
+
+    // Convert amounts into cents
+    const toCents = (value) => {
+      const amount = Number(value || 0);
+
+      if (!Number.isFinite(amount)) return 0;
+
+      return Math.max(0, Math.round(amount * 100));
+    };
+
+    // Calculate available dynamic pool income
+    let dynamicPoolIncomeCents = 0;
+
+    const activePools = Array.isArray(user.activePools)
+      ? user.activePools
+      : [];
+
+    for (const pool of activePools) {
+      const daysPaid = Math.max(0, Number(pool.daysPaid || 0));
+      const dailyAmount = Math.max(0, Number(pool.dailyAmount || 0));
+      const withdrawnAmount = Math.max(0, Number(pool.withdrawnAmount || 0));
+
+      const earnedCents = toCents(daysPaid * dailyAmount);
+      const withdrawnCents = toCents(withdrawnAmount);
+
+      dynamicPoolIncomeCents += Math.max(
+        0,
+        earnedCents - withdrawnCents
+      );
+    }
+
+    // Eligible income sources
+    const directCents = toCents(user.directIncome);
+    const levelCents = toCents(user.levelIncome);
+    const rewardCents = toCents(user.rewardIncome);
+
+    const totalIncomeCents =
+      directCents +
+      levelCents +
+      rewardCents +
+      dynamicPoolIncomeCents;
+
+    // Gross withdrawal in multiples of $10
+    const grossWithdrawalCents =
+      Math.floor(totalIncomeCents / 1000) * 1000;
+
+    if (grossWithdrawalCents < 1000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Minimum $10 eligible income is required.',
+        availableIncome: totalIncomeCents / 100
+      });
+    }
+
+    // 10% fee and 90% net withdrawal
+    const feeCents = Math.round(
+      grossWithdrawalCents * 10 / 100
+    );
+
+    const netWithdrawalCents =
+      grossWithdrawalCents - feeCents;
+
+    // Deduct income in priority order
+    let remainingToDeduct = grossWithdrawalCents;
+
+    const directDeductCents = Math.min(
+      directCents,
+      remainingToDeduct
+    );
+
+    remainingToDeduct -= directDeductCents;
+
+    const levelDeductCents = Math.min(
+      levelCents,
+      remainingToDeduct
+    );
+
+    remainingToDeduct -= levelDeductCents;
+
+    const rewardDeductCents = Math.min(
+      rewardCents,
+      remainingToDeduct
+    );
+
+    remainingToDeduct -= rewardDeductCents;
+
+    const poolDeductCents = remainingToDeduct;
+
+    if (poolDeductCents > dynamicPoolIncomeCents) {
+      return res.status(400).json({
+        success: false,
+        message: 'Income calculation mismatch. Please refresh and try again.'
+      });
+    }
+
+    // Deduct direct income
+    user.directIncome = Number(
+      ((directCents - directDeductCents) / 100).toFixed(2)
+    );
+
+    // Deduct level income
+    user.levelIncome = Number(
+      ((levelCents - levelDeductCents) / 100).toFixed(2)
+    );
+
+    // Deduct reward income
+    user.rewardIncome = Number(
+      ((rewardCents - rewardDeductCents) / 100).toFixed(2)
+    );
+
+    // Deduct dynamic pool income
+    let poolRemainingCents = poolDeductCents;
+
+    for (const pool of activePools) {
+      if (poolRemainingCents <= 0) break;
+
+      const earnedCents = toCents(
+        Number(pool.daysPaid || 0) *
+        Number(pool.dailyAmount || 0)
+      );
+
+      const alreadyWithdrawnCents = toCents(
+        pool.withdrawnAmount
+      );
+
+      const availableCents = Math.max(
+        0,
+        earnedCents - alreadyWithdrawnCents
+      );
+
+      const deductCents = Math.min(
+        availableCents,
+        poolRemainingCents
+      );
+
+      pool.withdrawnAmount = Number(
+        ((alreadyWithdrawnCents + deductCents) / 100).toFixed(2)
+      );
+
+      poolRemainingCents -= deductCents;
+    }
+
+    // Update stored pool income
+    user.poolIncome = Math.max(
+      0,
+      Number(
+        (
+          Number(user.poolIncome || 0) -
+          poolDeductCents / 100
+        ).toFixed(2)
+      )
+    );
+
+    const grossAmount = grossWithdrawalCents / 100;
+    const fee = feeCents / 100;
+    const netAmount = netWithdrawalCents / 100;
+
+    // Create automatically APPROVED withdrawal
+    const withdrawal = await Withdrawal.create({
+      userId: user.userId,
+      source: 'income_withdrawal',
+      grossAmount,
+      fee,
+      netAmount,
+      walletAddress: user.walletAddress,
+      status: 'approved',
+      date: new Date()
+    });
+
+    // Create automatically APPROVED transaction
+    const transaction = await Transaction.create({
+      userId: user.userId,
+      type: 'withdrawal',
+      source: 'income_withdrawal',
+      amount: grossAmount,
+      grossAmount,
+      fee,
+      netAmount,
+      description:
+        `Leader income withdrawal: $${netAmount} after 10% fee. Automatically approved. No wallet credit.`,
+      status: 'approved',
+      date: new Date()
+    });
+
+    // Update total withdrawn using net amount
+    user.totalWithdrawn = Number(
+      (
+        Number(user.totalWithdrawn || 0) +
+        netAmount
+      ).toFixed(2)
+    );
+
+    // IMPORTANT: Wallet balance is not credited.
+    await user.save();
+
+    const remainingIncome = Number(
+      (
+        (totalIncomeCents - grossWithdrawalCents) / 100
+      ).toFixed(2)
+    );
+
+    return res.json({
+      success: true,
+      message: 'Leader withdrawal automatically approved successfully.',
+
+      userId: user.userId,
+
+      withdrawalId: withdrawal._id,
+      transactionId: transaction._id,
+
+      status: 'approved',
+
+      report: {
+        totalRequested: grossAmount,
+        totalFeeDeducted: fee,
+        totalNetAmount: netAmount,
+        totalNetUSDT: netAmount,
+        totalToTopupWallet: 0,
+        splitPercentage: 0
+      },
+
+      walletBalance: Number(user.walletBalance || 0),
+
+      remainingIncome,
+
+      breakdown: {
+        directIncome: directDeductCents / 100,
+        levelIncome: levelDeductCents / 100,
+        rewardIncome: rewardDeductCents / 100,
+        poolIncome: poolDeductCents / 100
+      }
+    });
+
+  } catch (error) {
+    console.error('Leader Auto Withdrawal Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Leader withdrawal failed.'
+    });
+  }
+});
 
 
 
