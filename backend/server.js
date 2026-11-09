@@ -560,16 +560,60 @@ if (process.env.NODE_ENV === 'production') {
 // ====================== 6. DEMO COUNTER SCHEDULER ======================
 
 
+// async function startDemoCounter() {
+//     try {
+//         // Create or update the community counter settings
+//         const demo = await DemoCounter.findOneAndUpdate(
+//             { name: 'community' },
+//             {
+//                 $set: {
+//                     enabled: true,
+//                     incrementBy: 1,
+//                     intervalMinutes: 4
+//                 },
+//                 $setOnInsert: {
+//                     demoUsers: 0,
+//                     lastIncrementAt: null
+//                 }
+//             },
+//             {
+//                 upsert: true,
+//                 returnDocument: 'after',
+//                 runValidators: true
+//             }
+//         );
+
+//         console.log(
+//             `✅ Demo Counter Enabled | Current: ${demo.demoUsers} | +${demo.incrementBy} every ${demo.intervalMinutes} minutes`
+//         );
+
+//         // Check every minute; actual increment happens only when due
+//         setInterval(() => {
+//             incrementDemoCounter();
+//         }, 60 * 1000);
+
+//         // Check once immediately after startup
+//         await incrementDemoCounter();
+
+//         console.log('✅ Demo Counter Scheduler Started');
+
+//     } catch (error) {
+//         console.error('❌ Demo Counter Startup Error:', error);
+//     }
+// }
+
+
+// ====================== 6. DEMO COUNTER SCHEDULER ======================
+
 async function startDemoCounter() {
     try {
-        // Create or update the community counter settings
         const demo = await DemoCounter.findOneAndUpdate(
             { name: 'community' },
             {
                 $set: {
                     enabled: true,
                     incrementBy: 1,
-                    intervalMinutes: 4
+                    intervalMinutes: 20
                 },
                 $setOnInsert: {
                     demoUsers: 0,
@@ -584,16 +628,17 @@ async function startDemoCounter() {
         );
 
         console.log(
-            `✅ Demo Counter Enabled | Current: ${demo.demoUsers} | +${demo.incrementBy} every ${demo.intervalMinutes} minutes`
+            `✅ Demo Counter | Current: ${demo.demoUsers} | +${demo.incrementBy} every ${demo.intervalMinutes} minutes`
         );
 
-        // Check every minute; actual increment happens only when due
-        setInterval(() => {
-            incrementDemoCounter();
+        // Check every minute
+        setInterval(async () => {
+            try {
+                await incrementDemoCounter();
+            } catch (error) {
+                console.error('Demo Counter Error:', error);
+            }
         }, 60 * 1000);
-
-        // Check once immediately after startup
-        await incrementDemoCounter();
 
         console.log('✅ Demo Counter Scheduler Started');
 
@@ -601,6 +646,8 @@ async function startDemoCounter() {
         console.error('❌ Demo Counter Startup Error:', error);
     }
 }
+
+
 
 
 // ====================== 7. DATABASE & SERVER ======================
