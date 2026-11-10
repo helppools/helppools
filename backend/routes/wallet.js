@@ -1013,31 +1013,105 @@ const getSourceDescription = (source) => {
 
 const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
 
+// async function checkPackageDirectEligibility(user, requiredPackage) {
+//   const userPackage = Number(requiredPackage);
+
+//   const PACKAGE_REQUIREMENTS = {
+//     30: 2,
+//     60: 4,
+//     120: 6,
+//     240: 8,
+//     480: 10,
+//     960: 12
+//   };
+
+//   const requiredDirects = PACKAGE_REQUIREMENTS[userPackage];
+
+//   if (!requiredDirects) {
+//     return {
+//       allowed: false,
+//       message: "Invalid package selected.",
+//       packageAmount: userPackage,
+//       matchingDirects: 0,
+//       requiredDirects: 0
+//     };
+//   }
+
+//   // Har package ke liye direct ka active package $30 hona chahiye.
+//   const directUsers = await User.find({
+//     sponsorId: user.userId
+//   })
+//     .select("userId topUpAmount packages")
+//     .lean();
+
+//   const directIds = directUsers.map(item => item.userId);
+
+//   const subscriptions = directIds.length
+//     ? await PackageSubscription.find({
+//         userId: { $in: directIds },
+//         packageAmount: 30,
+//         status: { $in: ["ACTIVE", "COMPLETED"] }
+//       })
+//         .select("userId packageAmount")
+//         .lean()
+//     : [];
+
+//   // Har direct ko sirf ek baar count karo.
+//   const matchingDirectIds = new Set(
+//     subscriptions.map(item => String(item.userId))
+//   );
+
+//   // Legacy package records support.
+//   for (const direct of directUsers) {
+//     const legacyAmounts = [
+//       Number(direct.topUpAmount || 0),
+//       ...(Array.isArray(direct.packages)
+//         ? direct.packages.map(item => Number(item.amount || 0))
+//         : [])
+//     ];
+
+//     if (legacyAmounts.includes(30)) {
+//       matchingDirectIds.add(String(direct.userId));
+//     }
+//   }
+
+//   const matchingDirects = matchingDirectIds.size;
+//   const allowed = matchingDirects >= requiredDirects;
+
+//   return {
+//     allowed,
+//     message: allowed
+//       ? "Package direct requirement completed."
+//       : `Your $${userPackage} package requires ${requiredDirects} direct referrals with an active $30 package. Matching: ${matchingDirects}/${requiredDirects}.`,
+//     packageAmount: userPackage,
+//     directPackage: 30,
+//     matchingDirects,
+//     requiredDirects
+//   };
+// }
+
+// Direct eligibility sirf selected package-stage subscription ke package par check hogi.
+// Normal direct/level/reward/pool income par package direct condition apply nahi hogi.
+
+
 async function checkPackageDirectEligibility(user, requiredPackage) {
   const userPackage = Number(requiredPackage);
 
-  const PACKAGE_REQUIREMENTS = {
-    30: 2,
-    60: 4,
-    120: 6,
-    240: 8,
-    480: 10,
-    960: 12
-  };
+  const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
+  const requiredDirects = 2;
 
-  const requiredDirects = PACKAGE_REQUIREMENTS[userPackage];
-
-  if (!requiredDirects) {
+  if (!PACKAGE_LEVELS.includes(userPackage)) {
     return {
       allowed: false,
       message: "Invalid package selected.",
       packageAmount: userPackage,
       matchingDirects: 0,
-      requiredDirects: 0
+      requiredDirects: 2
     };
   }
 
-  // Har package ke liye direct ka active package $30 hona chahiye.
+  // Har package ke liye 2 direct referrals required.
+  // Direct ka active package $30 hona chahiye.
   const directUsers = await User.find({
     sponsorId: user.userId
   })
@@ -1061,7 +1135,7 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
     subscriptions.map(item => String(item.userId))
   );
 
-  // Legacy package records support.
+  // Existing legacy package records support unchanged.
   for (const direct of directUsers) {
     const legacyAmounts = [
       Number(direct.topUpAmount || 0),
@@ -1076,24 +1150,137 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
   }
 
   const matchingDirects = matchingDirectIds.size;
-  const allowed = matchingDirects >= requiredDirects;
+
+  // First condition: 2 directs required.
+  if (matchingDirects < requiredDirects) {
+    return {
+      allowed: false,
+      message:
+        `Your $${userPackage} package requires 2 direct referrals with an active $30 package. Matching: ${matchingDirects}/2.`,
+      packageAmount: userPackage,
+      directPackage: 30,
+      matchingDirects,
+      requiredDirects
+    };
+  }
+
+  // Second condition: next package upgrade required.
+  const currentIndex = PACKAGE_LEVELS.indexOf(userPackage);
+  const nextPackage = PACKAGE_LEVELS[currentIndex + 1];
+
+  // $960 is the highest package, so no next upgrade is required.
+  if (!nextPackage) {
+    return {
+      allowed: true,
+      message: "Package eligibility completed.",
+      packageAmount: userPackage,
+      matchingDirects,
+      requiredDirects
+    };
+  }
+
+  const nextUpgrade = await PackageSubscription.findOne({
+    userId: user.userId,
+    packageAmount: nextPackage,
+    purchaseType: "UPGRADE",
+    status: "ACTIVE"
+  }).select("_id");
+
+  if (!nextUpgrade) {
+    return {
+      allowed: false,
+      message:
+        `Please upgrade your package to $${nextPackage} before withdrawing this income.`,
+      packageAmount: userPackage,
+      nextPackage,
+      matchingDirects,
+      requiredDirects
+    };
+  }
 
   return {
-    allowed,
-    message: allowed
-      ? "Package direct requirement completed."
-      : `Your $${userPackage} package requires ${requiredDirects} direct referrals with an active $30 package. Matching: ${matchingDirects}/${requiredDirects}.`,
+    allowed: true,
+    message: "Package eligibility completed.",
     packageAmount: userPackage,
-    directPackage: 30,
+    nextPackage,
     matchingDirects,
     requiredDirects
   };
 }
 
-// Direct eligibility sirf selected package-stage subscription ke package par check hogi.
-// Normal direct/level/reward/pool income par package direct condition apply nahi hogi.
+
+// Direct eligibility for Plan Stage Income.
+// Normal income sources are not checked here.
+// async function checkSelectedPackageStageEligibility(user, items) {
+//   const stageItems = items.filter(
+//     item => item.source === "plan_stage"
+//   );
+
+//   const requiredPackages = new Set();
+
+//   for (const item of stageItems) {
+//     const subscription = await PackageSubscription.findOne({
+//       _id: item.subscriptionId,
+//       userId: user.userId
+//     }).select("packageAmount");
+
+//     if (!subscription) {
+//       throw new Error("Selected package subscription was not found.");
+//     }
+
+//     requiredPackages.add(Number(subscription.packageAmount));
+//   }
+
+//   for (const packageAmount of requiredPackages) {
+//     const eligibility = await checkPackageDirectEligibility(
+//       user,
+//       packageAmount
+//     );
+
+//     if (!eligibility.allowed) {
+//       return eligibility;
+//     }
+//   }
+
+//   return null;
+// }
+
+// function checkSelectedPackageStageEligibility(user, items) {
+//   const stageItems = items.filter(item => item.source === "plan_stage");
+//   const requiredPackages = new Set();
+
+//   for (const item of stageItems) {
+//     const subscription = await PackageSubscription.findOne({
+//       _id: item.subscriptionId,
+//       userId: user.userId
+//     }).select("packageAmount");
+
+//     if (!subscription) {
+//       throw new Error("Selected package subscription was not found.");
+//     }
+
+//     requiredPackages.add(Number(subscription.packageAmount));
+//   }
+
+//   for (const packageAmount of requiredPackages) {
+//     const eligibility = await checkPackageDirectEligibility(
+//       user,
+//       packageAmount
+//     );
+
+//     if (!eligibility.allowed) {
+//       return eligibility;
+//     }
+//   }
+
+//   return null;
+// }
+
 async function checkSelectedPackageStageEligibility(user, items) {
-  const stageItems = items.filter(item => item.source === "plan_stage");
+  const stageItems = items.filter(
+    item => item.source === "plan_stage"
+  );
+
   const requiredPackages = new Set();
 
   for (const item of stageItems) {
