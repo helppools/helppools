@@ -1749,7 +1749,7 @@ function Register() {
   const [showConfetti, setShowConfetti] = useState(false);
 
   // New popup states
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(true);
   const [copyMessage, setCopyMessage] = useState("");
 
   const countryOptions = [
@@ -1910,7 +1910,7 @@ function Register() {
 
       setShowPopup(true);
       setShowConfetti(true);
-      setShowPassword(false);
+      setShowPassword(true);
       setLoading(false);
     } catch (err) {
       setErrorMsg(
