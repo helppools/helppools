@@ -1,18 +1,10 @@
 
-const mongoose = require("mongoose");
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
 const RoyaltyReward = require("../models/RoyaltyReward");
 
 const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
-/**
- * Get first successful top-up from packages array.
- * The oldest valid package is treated as the first top-up.
- *
- * Fallback is provided for older records where packages
- * is empty but topUpDate and topUpAmount are available.
- */
 function getFirstTopUp(user) {
   if (!user) return null;
 
@@ -37,7 +29,6 @@ function getFirstTopUp(user) {
     };
   }
 
-  // Legacy fallback
   if (
     user.isToppedUp === true &&
     Number(user.topUpAmount) > 0 &&
@@ -53,307 +44,362 @@ function getFirstTopUp(user) {
   return null;
 }
 
-/**
- * Royalty reward tiers.
- * Only the highest achieved tier is paid.
- */
 function getRoyaltyTier(count) {
-  if (count >= 15) {
-    return { tier: 15, amount: 150 };
-  }
-
-  if (count >= 10) {
-    return { tier: 10, amount: 70 };
-  }
-
-  if (count >= 5) {
-    return { tier: 5, amount: 30 };
-  }
+  if (count >= 15) return { tier: 15, amount: 150 };
+  if (count >= 10) return { tier: 10, amount: 70 };
+  if (count >= 5) return { tier: 5, amount: 30 };
 
   return { tier: 0, amount: 0 };
 }
 
-/**
- * Process Royalty for one owner.
- */
+function getRewardResult(reward) {
+  if (!reward) return "SKIPPED";
+
+  if (reward.status === "PAID") return "PAID";
+  if (reward.status === "NO_REWARD") return "NO_REWARD";
+  if (reward.status === "EXCLUDED") return "EXCLUDED";
+
+  return "PENDING";
+}
+
 async function processRoyaltyForUser(owner) {
   if (!owner || !owner.userId) {
     return "SKIPPED";
   }
 
-  // Fetch latest owner data.
-  const currentOwner = await User.findOne({
-    userId: owner.userId
-  }).select(
-    "userId role packages isToppedUp topUpAmount topUpDate royaltyProcessedAt"
+  const userId = Number(owner.userId);
+
+  if (!Number.isFinite(userId)) {
+    return "SKIPPED";
+  }
+
+  const currentOwner = await User.findOne({ userId }).select(
+    "userId role packages isToppedUp topUpAmount topUpDate royaltyProcessedAt walletBalance"
   );
 
   if (!currentOwner) {
     return "USER_NOT_FOUND";
   }
 
-  if (currentOwner.royaltyProcessedAt) {
+  // Check whether an earlier execution left a PENDING reward.
+  let rewardRecord = await RoyaltyReward.findOne({ userId });
+
+  if (rewardRecord && rewardRecord.status !== "PENDING") {
+    return getRewardResult(rewardRecord);
+  }
+
+  // If already processed and there is no pending reward to recover,
+  // do not process or credit again.
+  if (currentOwner.royaltyProcessedAt && !rewardRecord) {
     return "ALREADY_PROCESSED";
   }
 
-  // Get first successful top-up from packages.
-  const firstTopUp = getFirstTopUp(currentOwner);
+  // --------------------------------------------------
+  // STEP 1: Create or recover the reward record
+  // --------------------------------------------------
 
-  if (!firstTopUp) {
-    return "SKIPPED";
-  }
+  if (!rewardRecord) {
+    const firstTopUp = getFirstTopUp(currentOwner);
 
-  const activationAt = firstTopUp.date;
+    if (!firstTopUp) {
+      return "SKIPPED";
+    }
 
-  const expiresAt = new Date(
-    activationAt.getTime() + FIVE_DAYS_MS
-  );
+    const activationAt = firstTopUp.date;
+    const expiresAt = new Date(
+      activationAt.getTime() + FIVE_DAYS_MS
+    );
 
-  // Do not process before the 5-day offer expires.
-  if (new Date() < expiresAt) {
-    return "NOT_EXPIRED";
-  }
+    if (new Date() < expiresAt) {
+      return "NOT_EXPIRED";
+    }
 
-  const session = await mongoose.startSession();
+    const directUsers = await User.find({
+      sponsorId: userId
+    }).select(
+      "userId packages isToppedUp topUpAmount topUpDate"
+    );
 
-  try {
-    let result = "SKIPPED";
+    const qualifyingDirects = directUsers.filter((direct) => {
+      const first = getFirstTopUp(direct);
 
-    await session.withTransaction(async () => {
-      // Recheck owner inside transaction.
-      const ownerInsideTransaction = await User.findOne({
-        userId: owner.userId
-      })
-        .select(
-          "userId role packages isToppedUp topUpAmount topUpDate royaltyProcessedAt"
-        )
-        .session(session);
-
-      if (!ownerInsideTransaction) {
-        result = "USER_NOT_FOUND";
-        return;
-      }
-
-      if (ownerInsideTransaction.royaltyProcessedAt) {
-        result = "ALREADY_PROCESSED";
-        return;
-      }
-
-      // Recalculate first top-up from latest database record.
-      const latestFirstTopUp = getFirstTopUp(
-        ownerInsideTransaction
+      return (
+        first &&
+        first.amount === 30 &&
+        first.date >= activationAt &&
+        first.date <= expiresAt
       );
-
-      if (!latestFirstTopUp) {
-        result = "SKIPPED";
-        return;
-      }
-
-      const latestActivationAt = latestFirstTopUp.date;
-
-      const latestExpiresAt = new Date(
-        latestActivationAt.getTime() + FIVE_DAYS_MS
-      );
-
-      if (new Date() < latestExpiresAt) {
-        result = "NOT_EXPIRED";
-        return;
-      }
-
-      // Prevent duplicate Royalty reward records.
-      const alreadyProcessed = await RoyaltyReward.findOne({
-        userId: owner.userId
-      }).session(session);
-
-      if (alreadyProcessed) {
-        result = "ALREADY_PROCESSED";
-        return;
-      }
-
-      // Fetch all direct referrals.
-      const directUsers = await User.find({
-        sponsorId: owner.userId
-      })
-        .select(
-          "userId packages isToppedUp topUpAmount topUpDate"
-        )
-        .session(session);
-
-      // Each unique direct counts only once.
-      // First successful top-up must be exactly $30.
-      const qualifyingDirects = directUsers.filter((direct) => {
-        const first = getFirstTopUp(direct);
-
-        return (
-          first &&
-          first.amount === 30 &&
-          first.date >= latestActivationAt &&
-          first.date <= latestExpiresAt
-        );
-      });
-
-      const directCount = new Set(
-        qualifyingDirects.map((user) => Number(user.userId))
-      ).size;
-
-      const reward = getRoyaltyTier(directCount);
-
-      // Only exact role "leader" is excluded.
-      const isLeader =
-        String(ownerInsideTransaction.role || "")
-          .toLowerCase() === "leader";
-
-      const rewardStatus = isLeader
-        ? "EXCLUDED"
-        : reward.amount > 0
-          ? "PAID"
-          : "NO_REWARD";
-
-      const processedAt = new Date();
-
-      // Create Royalty reward record.
-      const [rewardRecord] = await RoyaltyReward.create(
-        [
-          {
-            userId: owner.userId,
-            activationAt: latestActivationAt,
-            expiresAt: latestExpiresAt,
-            directCount,
-            rewardAmount: isLeader ? 0 : reward.amount,
-            rewardTier: reward.tier,
-            status: rewardStatus,
-            processedAt
-          }
-        ],
-        { session }
-      );
-
-      // Leader: mark processed without wallet credit.
-      // Do not overwrite any historical Royalty income.
-      if (isLeader) {
-        const updatedLeader = await User.updateOne(
-          {
-            userId: owner.userId,
-            royaltyProcessedAt: null
-          },
-          {
-            $set: {
-              royaltyDirectCount: directCount,
-              royaltyProcessedAt: processedAt
-            }
-          },
-          { session }
-        );
-
-        if (updatedLeader.modifiedCount !== 1) {
-          throw new Error(
-            "Unable to mark leader Royalty as excluded"
-          );
-        }
-
-        result = "EXCLUDED";
-        return;
-      }
-
-      // No reward below 5 qualifying direct referrals.
-      if (reward.amount <= 0) {
-        const updatedUser = await User.updateOne(
-          {
-            userId: owner.userId,
-            royaltyProcessedAt: null
-          },
-          {
-            $set: {
-              royaltyDirectCount: directCount,
-              royaltyProcessedAt: processedAt
-            }
-          },
-          { session }
-        );
-
-        if (updatedUser.modifiedCount !== 1) {
-          throw new Error(
-            "Unable to mark Royalty as processed"
-          );
-        }
-
-        result = "NO_REWARD";
-        return;
-      }
-
-      // Credit eligible non-leader user.
-      const updatedUser = await User.findOneAndUpdate(
-        {
-          userId: owner.userId,
-          royaltyProcessedAt: null
-        },
-        {
-          $inc: {
-            walletBalance: reward.amount,
-            royaltyIncome: reward.amount,
-            totalRoyaltyIncome: reward.amount
-          },
-          $set: {
-            royaltyDirectCount: directCount,
-            royaltyProcessedAt: processedAt
-          }
-        },
-        {
-          new: true,
-          session
-        }
-      );
-
-      if (!updatedUser) {
-        throw new Error(
-          "Royalty user already processed or not found"
-        );
-      }
-
-      // Unique transaction key for this Royalty offer.
-      const idempotencyKey =
-        `royalty:${owner.userId}:first-topup-5days`;
-
-      const [transaction] = await Transaction.create(
-        [
-          {
-            userId: owner.userId,
-            toUserId: owner.userId,
-            type: "royalty_income",
-            source: "royalty_offer",
-            amount: reward.amount,
-            grossAmount: reward.amount,
-            netAmount: reward.amount,
-            walletBalance: updatedUser.walletBalance,
-            description:
-              `Royalty reward: ${directCount} qualifying unique direct referrals`,
-            idempotencyKey,
-            status: "completed",
-            date: processedAt
-          }
-        ],
-        { session }
-      );
-
-      rewardRecord.transactionId = transaction._id;
-
-      await rewardRecord.save({ session });
-
-      result = "PAID";
     });
 
-    return result;
-  } finally {
-    await session.endSession();
+    const directCount = new Set(
+      qualifyingDirects.map((user) => Number(user.userId))
+    ).size;
+
+    const tier = getRoyaltyTier(directCount);
+
+    const isLeader =
+      String(currentOwner.role || "").toLowerCase() === "leader";
+
+    try {
+      rewardRecord = await RoyaltyReward.create({
+        userId,
+        activationAt,
+        expiresAt,
+        directCount,
+        rewardAmount: isLeader ? 0 : tier.amount,
+        rewardTier: tier.tier,
+        status: "PENDING"
+      });
+    } catch (error) {
+      // Another cron execution may have created this user's reward.
+      if (error.code !== 11000) {
+        throw error;
+      }
+
+      rewardRecord = await RoyaltyReward.findOne({ userId });
+
+      if (!rewardRecord) {
+        throw error;
+      }
+
+      if (rewardRecord.status !== "PENDING") {
+        return getRewardResult(rewardRecord);
+      }
+    }
   }
+
+  // --------------------------------------------------
+  // STEP 2: Recover the saved reward details
+  // --------------------------------------------------
+
+  const isLeader =
+    String(currentOwner.role || "").toLowerCase() === "leader";
+
+  const rewardAmount = isLeader
+    ? 0
+    : Number(rewardRecord.rewardAmount || 0);
+
+  const directCount = Number(rewardRecord.directCount || 0);
+
+  const processedAt = new Date();
+
+  // --------------------------------------------------
+  // STEP 3: Leader / No reward processing
+  // --------------------------------------------------
+
+  if (isLeader || rewardAmount <= 0) {
+    const finalStatus = isLeader ? "EXCLUDED" : "NO_REWARD";
+
+    // Atomic conditional update: only one execution can mark the user.
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        userId,
+        royaltyProcessedAt: null
+      },
+      {
+        $set: {
+          royaltyDirectCount: directCount,
+          royaltyProcessedAt: processedAt
+        }
+      },
+     {
+  returnDocument: "after"
+}
+    );
+
+    if (!updatedUser) {
+      const latestUser = await User.findOne({ userId }).select(
+        "royaltyProcessedAt"
+      );
+
+      if (!latestUser || !latestUser.royaltyProcessedAt) {
+        throw new Error("Unable to mark Royalty as processed");
+      }
+    }
+
+    await RoyaltyReward.updateOne(
+      {
+        _id: rewardRecord._id,
+        status: "PENDING"
+      },
+      {
+        $set: {
+          status: finalStatus,
+          processedAt
+        }
+      }
+    );
+
+    return finalStatus;
+  }
+
+  // --------------------------------------------------
+  // STEP 4: Create / recover the unique transaction
+  // --------------------------------------------------
+
+  const idempotencyKey =
+    `royalty:${userId}:first-topup-5days`;
+
+  let transaction = await Transaction.findOne({
+    idempotencyKey
+  });
+
+  if (!transaction) {
+    try {
+      transaction = await Transaction.create({
+        userId,
+        toUserId: userId,
+        type: "royalty_income",
+        source: "royalty_offer",
+        amount: rewardAmount,
+        grossAmount: rewardAmount,
+        netAmount: rewardAmount,
+        walletBalance: 0,
+        description:
+          `Royalty reward: ${directCount} qualifying unique direct referrals`,
+        idempotencyKey,
+        status: "pending",
+        date: processedAt
+      });
+    } catch (error) {
+      // Unique index protects against duplicate transaction creation.
+      if (error.code !== 11000) {
+        throw error;
+      }
+
+      transaction = await Transaction.findOne({
+        idempotencyKey
+      });
+
+      if (!transaction) {
+        throw error;
+      }
+    }
+  }
+
+  // If transaction is already completed, recover reward status
+  // without crediting the wallet again.
+  if (transaction.status === "completed") {
+    await RoyaltyReward.updateOne(
+      {
+        _id: rewardRecord._id,
+        status: "PENDING"
+      },
+      {
+        $set: {
+          status: "PAID",
+          transactionId: transaction._id,
+          processedAt: transaction.date || processedAt
+        }
+      }
+    );
+
+    return "PAID";
+  }
+
+  // --------------------------------------------------
+  // STEP 5: Atomic one-time wallet credit
+  // --------------------------------------------------
+
+  let updatedUser = await User.findOneAndUpdate(
+    {
+      userId,
+      royaltyProcessedAt: null
+    },
+    {
+      $inc: {
+        walletBalance: rewardAmount,
+        royaltyIncome: rewardAmount,
+        totalRoyaltyIncome: rewardAmount
+      },
+      $set: {
+        royaltyDirectCount: directCount,
+        royaltyProcessedAt: processedAt
+      }
+    },
+    {
+  returnDocument: "after"
+}
+  );
+
+  if (!updatedUser) {
+    // A previous execution may have credited the wallet
+    // and crashed before completing the transaction record.
+    updatedUser = await User.findOne({ userId }).select(
+      "userId walletBalance royaltyProcessedAt"
+    );
+
+    if (!updatedUser || !updatedUser.royaltyProcessedAt) {
+      throw new Error(
+        "Wallet credit could not be confirmed. Transaction left pending."
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // STEP 6: Complete the transaction record
+  // --------------------------------------------------
+
+  await Transaction.updateOne(
+    {
+      _id: transaction._id,
+      status: "pending"
+    },
+    {
+      $set: {
+        status: "completed",
+        walletBalance: updatedUser.walletBalance
+      }
+    }
+  );
+
+  // Verify transaction completion before marking reward PAID.
+  const completedTransaction = await Transaction.findById(
+    transaction._id
+  );
+
+  if (!completedTransaction || completedTransaction.status !== "completed") {
+    throw new Error(
+      "Wallet credit confirmed, but transaction completion is pending."
+    );
+  }
+
+  // --------------------------------------------------
+  // STEP 7: Mark reward as PAID
+  // --------------------------------------------------
+
+  await RoyaltyReward.updateOne(
+    {
+      _id: rewardRecord._id,
+      status: "PENDING"
+    },
+    {
+      $set: {
+        status: "PAID",
+        transactionId: transaction._id,
+        processedAt
+      }
+    }
+  );
+
+  return "PAID";
 }
 
 /**
- * Process all expired Royalty offers.
- * This function should be scheduled through cron.
+ * Process expired Royalty offers and recover PENDING rewards.
  */
 async function processRoyaltyRewards() {
-  const owners = await User.find({
+  // Include PENDING rewards so interrupted executions can recover,
+  // even when royaltyProcessedAt has already been set.
+  const pendingRewards = await RoyaltyReward.find({
+    status: "PENDING"
+  })
+    .select("userId")
+    .limit(500);
+
+  const pendingIds = pendingRewards.map((reward) => reward.userId);
+
+  const eligibleOwners = await User.find({
     royaltyProcessedAt: null,
     $or: [
       {
@@ -368,21 +414,29 @@ async function processRoyaltyRewards() {
     .select("userId")
     .limit(500);
 
+  const ownerIds = new Set([
+    ...pendingIds,
+    ...eligibleOwners.map((owner) => owner.userId)
+  ]);
+
+  const owners = await User.find({
+    userId: { $in: Array.from(ownerIds) }
+  }).select("userId");
+
   let processed = 0;
   let failed = 0;
+  let pending = 0;
 
   for (const owner of owners) {
     try {
       const result = await processRoyaltyForUser(owner);
 
       if (
-        [
-          "PAID",
-          "NO_REWARD",
-          "EXCLUDED"
-        ].includes(result)
+        ["PAID", "NO_REWARD", "EXCLUDED"].includes(result)
       ) {
         processed++;
+      } else if (result === "PENDING") {
+        pending++;
       }
     } catch (error) {
       failed++;
@@ -395,7 +449,7 @@ async function processRoyaltyRewards() {
   }
 
   console.log(
-    `[Royalty] Processed: ${processed}, Failed: ${failed}`
+    `[Royalty] Processed: ${processed}, Pending: ${pending}, Failed: ${failed}`
   );
 }
 

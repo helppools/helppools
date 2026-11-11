@@ -919,251 +919,7 @@ const PackageSubscription = require("../models/PackageSubscription");
 // Level 11–20 = 0.5%
 // ============================================================
 
-
-// async function distributePackageCommission(
-//   targetUser,
-//   packageAmount,
-//   subscriptionId,
-//     isFreeFirstPackage = false
-// ) {
-//   const amount = Number(packageAmount);
-
-//   if (!Number.isFinite(amount) || amount <= 0) {
-//     throw new Error("Invalid package amount for commission.");
-//   }
-
-//   if (!targetUser?.userId || !subscriptionId) {
-//     throw new Error("Missing targetUser or subscriptionId.");
-//   }
-
-//   const credited = [];
-
-//   try {
-//     // ======================================================
-//     // PART 1: DIRECT INCOME 25% + LEVEL INCOME
-//     // ======================================================
-
-//     let uplineId = targetUser.sponsorId;
-//     const visitedUsers = new Set();
-
-//     for (let level = 1; level <= 20 && uplineId; level++) {
-//       const currentId = String(uplineId);
-
-//       // Prevent infinite loop if sponsor chain contains a cycle.
-//       if (visitedUsers.has(currentId)) break;
-//       visitedUsers.add(currentId);
-
-//       const upline = await User.findOne({
-//         userId: Number(uplineId)
-//       }).select("userId sponsorId");
-
-//       if (!upline) break;
-
-//       const percentage =
-//         level === 1 ? 25 :
-//         level <= 10 ? 1 :
-//         0.5;
-
-//       const type =
-//         level === 1 ? "direct_income" : "level_income";
-
-//       const source =
-//         level === 1 ? "direct" : "level";
-
-//       const commission = Number(
-//         ((amount * percentage) / 100).toFixed(2)
-//       );
-
-//       const idempotencyKey =
-//         `${subscriptionId}:commission:${upline.userId}:level:${level}`;
-
-//       try {
-//         const txn = await Transaction.create({
-//           userId: upline.userId,
-//           type,
-//           source,
-//           amount: commission,
-//           package: amount,
-//           subscriptionId,
-//           fromUserId: targetUser.userId,
-//           idempotencyKey,
-//           description:
-//             level === 1
-//               ? `Direct Income 25% from ${targetUser.userId}`
-//               : `Level ${level} Income ${percentage}% from ${targetUser.userId}`,
-//           status: "completed",
-//           date: new Date()
-//         });
-
-//         const update =
-//           level === 1
-//             ? {
-//                 $inc: {
-//                   directIncome: commission,
-//                   totalDirectIncome: commission
-//                 }
-//               }
-//             : {
-//                 $inc: {
-//                   levelIncome: commission,
-//                   totalLevelIncome: commission
-//                 }
-//               };
-
-//         const result = await User.updateOne(
-//           { userId: upline.userId },
-//           update
-//         );
-
-//         if (result.matchedCount !== 1) {
-//           await Transaction.deleteOne({ _id: txn._id });
-
-//           throw new Error(
-//             `Commission balance update failed for ${upline.userId}`
-//           );
-//         }
-
-//         credited.push({
-//           transactionId: txn._id,
-//           userId: upline.userId,
-//           type,
-//           amount: commission
-//         });
-
-//         console.log(
-//           `[COMMISSION] Level ${level} | User ${upline.userId} | $${commission}`
-//         );
-
-//       } catch (err) {
-//         if (err.code === 11000) {
-//           console.log(`[DUPLICATE BLOCKED] ${idempotencyKey}`);
-//         } else {
-//           throw err;
-//         }
-//       }
-
-//       uplineId = upline.sponsorId;
-//     }
-
-//     // ======================================================
-//     // PART 2: NEAREST LEADER BONUS 10%
-//     // ======================================================
-
-//     // Confirmed exemption:
-//     // Leader's own free first $30 activation gets no 10% bonus.
-//     const isLeaderFreeFirstActivation =
-//       String(targetUser.role || "").toLowerCase() === "leader" &&
-//       amount === 30;
-
-//     if (!isLeaderFreeFirstActivation) {
-//       let leaderSearchId = targetUser.sponsorId;
-//       let nearestLeader = null;
-//       const leaderVisited = new Set();
-
-//       // Search upward and pay only the first exact "leader".
-//       while (leaderSearchId) {
-//         const currentId = String(leaderSearchId);
-
-//         if (leaderVisited.has(currentId)) break;
-//         leaderVisited.add(currentId);
-
-//         const upline = await User.findOne({
-//           userId: Number(leaderSearchId)
-//         }).select("userId sponsorId role");
-
-//         if (!upline) break;
-
-//         if (
-//           String(upline.role || "").toLowerCase() === "leader"
-//         ) {
-//           nearestLeader = upline;
-//           break;
-//         }
-
-//         // Skip normal users and continue upward.
-//         leaderSearchId = upline.sponsorId;
-//       }
-
-//       if (nearestLeader) {
-//         const leaderBonus = Number(
-//           ((amount * 10) / 100).toFixed(2)
-//         );
-
-//         const idempotencyKey =
-//           `${subscriptionId}:nearest-leader:${nearestLeader.userId}`;
-
-//         try {
-//           // Create transaction first to prevent duplicate credit.
-//         const txn = await Transaction.create({
-//   userId: nearestLeader.userId,
-//   type: "leader_income",
-//   source: "nearest_leader",
-//   amount: mongoose.Types.Decimal128.fromString(
-//     leaderBonus.toFixed(2)
-//   ),
-//   package: amount,
-//   subscriptionId,
-//   fromUserId: targetUser.userId,
-//   idempotencyKey,
-//   description: `Nearest Leader Bonus 10% from user ${targetUser.userId}`,
-//   status: "completed",
-//   date: new Date()
-// });
-
-//           // IMPORTANT: 10% goes directly to walletBalance.
-//           const result = await User.updateOne(
-//             { userId: nearestLeader.userId },
-//             {
-//               $inc: {
-//                 walletBalance: leaderBonus
-//               }
-//             }
-//           );
-
-//           if (result.matchedCount !== 1) {
-//             await Transaction.deleteOne({ _id: txn._id });
-
-//             throw new Error(
-//               `Leader wallet update failed for ${nearestLeader.userId}`
-//             );
-//           }
-
-//           credited.push({
-//             transactionId: txn._id,
-//             userId: nearestLeader.userId,
-//             type: "leader_income",
-//             amount: leaderBonus
-//           });
-
-//           console.log(
-//             `[NEAREST LEADER] Leader ${nearestLeader.userId} | Wallet +$${leaderBonus}`
-//           );
-
-//         } catch (err) {
-//           if (err.code === 11000) {
-//             console.log(`[DUPLICATE BLOCKED] ${idempotencyKey}`);
-//           } else {
-//             throw err;
-//           }
-//         }
-//       } else {
-//         console.log(
-//           `[NEAREST LEADER] No leader found for user ${targetUser.userId}`
-//         );
-//       }
-//     } else {
-//       console.log(
-//         `[NEAREST LEADER] Free first $30 leader activation exempted for ${targetUser.userId}`
-//       );
-//     }
-
-//     return credited;
-
-//   } catch (err) {
-//     await rollbackPackageCommission(credited);
-//     throw err;
-//   }
-// }
+ 
 
 
 async function distributePackageCommission(
@@ -1410,6 +1166,172 @@ async function distributePackageCommission(
 
 
 
+async function distributeRetopupCommission(
+  targetUser,
+  packageAmount,
+  subscriptionId,
+  retopupTransactionId
+) {
+  const amount = Number(packageAmount);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Invalid retopup commission amount.");
+  }
+
+  const credited = [];
+
+  try {
+    // =========================================
+    // DIRECT INCOME ONLY — 25%
+    // =========================================
+
+    if (targetUser.sponsorId) {
+      const sponsor = await User.findOne({
+        userId: Number(targetUser.sponsorId)
+      }).select("userId");
+
+      if (sponsor) {
+        const commission = Number(
+          ((amount * 25) / 100).toFixed(2)
+        );
+
+        const idempotencyKey =
+          `${retopupTransactionId}:retopup-direct:${sponsor.userId}`;
+
+        try {
+          const txn = await Transaction.create({
+            userId: sponsor.userId,
+            type: "direct_income",
+            source: "direct",
+            amount: commission,
+            package: amount,
+            subscriptionId,
+            fromUserId: targetUser.userId,
+            idempotencyKey,
+            description:
+              `Retopup Direct Income 25% from ${targetUser.userId}`,
+            status: "completed",
+            date: new Date()
+          });
+
+          const result = await User.updateOne(
+            { userId: sponsor.userId },
+            {
+              $inc: {
+                directIncome: commission,
+                totalDirectIncome: commission
+              }
+            }
+          );
+
+          if (result.matchedCount !== 1) {
+            await Transaction.deleteOne({ _id: txn._id });
+            throw new Error("Direct income credit failed.");
+          }
+
+          credited.push({
+            transactionId: txn._id,
+            userId: sponsor.userId,
+            type: "direct_income",
+            amount: commission
+          });
+        } catch (err) {
+          if (err.code !== 11000) throw err;
+        }
+      }
+    }
+
+    // =========================================
+    // NEAREST LEADER BONUS — 10%
+    // =========================================
+
+    let searchId = targetUser.sponsorId;
+    let nearestLeader = null;
+    const visited = new Set();
+
+    while (searchId) {
+      const currentId = String(searchId);
+
+      if (visited.has(currentId)) break;
+      visited.add(currentId);
+
+      const upline = await User.findOne({
+        userId: Number(searchId)
+      }).select("userId sponsorId role");
+
+      if (!upline) break;
+
+      if (
+        String(upline.role || "").toLowerCase() === "leader"
+      ) {
+        nearestLeader = upline;
+        break;
+      }
+
+      searchId = upline.sponsorId;
+    }
+
+    if (nearestLeader) {
+      const bonus = Number(
+        ((amount * 10) / 100).toFixed(2)
+      );
+
+      const idempotencyKey =
+        `${retopupTransactionId}:retopup-leader:${nearestLeader.userId}`;
+
+      try {
+        const txn = await Transaction.create({
+          userId: nearestLeader.userId,
+          type: "leader_income",
+          source: "nearest_leader",
+          amount: mongoose.Types.Decimal128.fromString(
+            bonus.toFixed(2)
+          ),
+          package: amount,
+          subscriptionId,
+          fromUserId: targetUser.userId,
+          idempotencyKey,
+          description:
+            `Retopup Nearest Leader Bonus 10% from ${targetUser.userId}`,
+          status: "completed",
+          date: new Date()
+        });
+
+        const result = await User.updateOne(
+          { userId: nearestLeader.userId },
+          {
+            $inc: {
+              walletBalance: bonus
+            }
+          }
+        );
+
+        if (result.matchedCount !== 1) {
+          await Transaction.deleteOne({ _id: txn._id });
+          throw new Error("Leader bonus credit failed.");
+        }
+
+        credited.push({
+          transactionId: txn._id,
+          userId: nearestLeader.userId,
+          type: "leader_income",
+          amount: bonus
+        });
+      } catch (err) {
+        if (err.code !== 11000) throw err;
+      }
+    }
+
+    return credited;
+
+  } catch (error) {
+    await rollbackPackageCommission(credited);
+    throw error;
+  }
+}
+
+
+
 // ============================================================
 // COMMISSION ROLLBACK
 // ============================================================
@@ -1461,38 +1383,292 @@ async function rollbackPackageCommission(credits) {
   }
 }
 
+ 
+
+// async function processStageFiveRetopup({
+//   payerUserId,
+//   targetUserId,
+//   amount,
+//     originalPackageAmount,
+//       subscriptionId,
+//   minimumReserve = 0
+// }) {
+//   const packageAmount = Number(amount);
+//   const payerId = Number(payerUserId);
+//   const targetId = Number(targetUserId);
+//   const reserve = Number(minimumReserve || 0);
+
+//   if (![30, 60, 120, 240, 480, 960].includes(packageAmount)) {
+//     throw new Error("Invalid retopup package amount.");
+//   }
+
+//   if (
+//     !Number.isFinite(payerId) ||
+//     payerId <= 0 ||
+//     !Number.isFinite(targetId) ||
+//     targetId <= 0
+//   ) {
+//     throw new Error("Invalid payer or target user ID.");
+//   }
+
+//   if (!Number.isFinite(reserve) || reserve < 0) {
+//     throw new Error("Invalid minimum wallet reserve.");
+//   }
+
+//   // Find the same active subscription.
+//  // Find the original active subscription.
+// const originalAmount = Number(originalPackageAmount);
+
+// if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+//   throw new Error("Invalid original package amount.");
+// }
+
+// const subscription = await PackageSubscription.findOne({
+//   userId: targetId,
+//   packageAmount: originalAmount,
+//   status: "ACTIVE"
+// }).sort({ createdAt: -1 });
+
+// if (!subscription) {
+//   throw new Error(
+//     `No active $${originalAmount} original package subscription found.`
+//   );
+// }
+
+//   // Special eligibility rule for $30 retopup.
+//   // Stage 5 must be ACHIEVED.
+//   // Stage 6 must be WAITING or RUNNING.
+//   if (packageAmount === 30) {
+//     const stage5 = (subscription.stages || []).find(
+//       stage => Number(stage.stageNumber) === 5
+//     );
+
+//     const stage6 = (subscription.stages || []).find(
+//       stage => Number(stage.stageNumber) === 6
+//     );
+
+//     console.log("========== $30 RETOPUP DEBUG ==========");
+// console.log("Original Package:", originalAmount);
+// console.log("Retopup Amount:", amount);
+// console.log("Current Stage:", subscription.currentStage);
+// console.log(
+//   "Stages:",
+//   JSON.stringify(subscription.stages, null, 2)
+// );
+// console.log("=======================================");
+
+//     if (
+//       Number(subscription.currentStage) !== 6 ||
+//       String(stage5?.status) !== "ACHIEVED" ||
+//       !["WAITING", "RUNNING"].includes(String(stage6?.status))
+//     ) {
+//       throw new Error(
+//         "Your $30 retopup is allowed only after Stage 5 is achieved and Stage 6 is WAITING or RUNNING."
+//       );
+//     }
+//   }
+
+//   // Every retopup gets a separate transaction ID.
+//   // This allows repeated retopups.
+//   const retopupId = new mongoose.Types.ObjectId();
+
+//   const idempotencyKey =
+//     `${subscription._id}:retopup:${retopupId}`;
+
+//   // Debit payer wallet.
+//   const debitResult = await User.updateOne(
+//     {
+//       userId: payerId,
+//       walletBalance: {
+//         $gte: packageAmount + reserve
+//       }
+//     },
+//     {
+//       $inc: {
+//         walletBalance: -packageAmount
+//       }
+//     }
+//   );
+
+//   if (debitResult.modifiedCount !== 1) {
+//     throw new Error(
+//       `Insufficient balance. Required $${packageAmount}` +
+//       (reserve ? ` plus $${reserve} reserve.` : ".")
+//     );
+//   }
+
+//   let transaction = null;
+//   let capUpdated = false;
+//   let commissionCredits = [];
+
+//   try {
+//     transaction = await Transaction.create({
+//       _id: retopupId,
+//       userId: targetId,
+//       fromUserId: payerId,
+//       toUserId: targetId,
+//       type: "package_retopup",
+//       source: "same_package_retopup",
+//       amount: packageAmount,
+//       package: packageAmount,
+//       subscriptionId: subscription._id,
+//       idempotencyKey,
+//       description: `Same package retopup $${packageAmount}`,
+//       status: "completed",
+//       date: new Date()
+//     });
+
+//     // For $30, recheck eligibility during the cap update too.
+//     const eligibilityFilter = packageAmount === 30
+//       ? {
+//           currentStage: 6,
+//           $and: [
+//             {
+//               stages: {
+//                 $elemMatch: {
+//                   stageNumber: 5,
+//                   status: "ACHIEVED"
+//                 }
+//               }
+//             },
+//             {
+//               stages: {
+//                 $elemMatch: {
+//                   stageNumber: 6,
+//                   status: { $in: ["WAITING", "RUNNING"] }
+//                 }
+//               }
+//             }
+//           ]
+//         }
+//       : {};
+
+//     // Increase cap on the SAME subscription.
+//     // No new cycle, stage reset, or timer reset.
+//     const updateResult = await PackageSubscription.updateOne(
+//   {
+//     _id: subscription._id,
+//     userId: targetId,
+//     packageAmount: originalAmount,
+//     status: "ACTIVE",
+//     ...eligibilityFilter
+//   },
+//   {
+//     $inc: {
+//       accountingCapAmount: packageAmount * 2
+//     }
+//   }
+// );
+
+//     if (updateResult.modifiedCount !== 1) {
+//       throw new Error(
+//         "Retopup eligibility changed or subscription allowance update failed."
+//       );
+//     }
+
+//     capUpdated = true;
+
+//     // Existing retopup commission: Direct 25% + nearest Leader 10%.
+//     const targetUser = await User.findOne({
+//       userId: targetId
+//     });
+
+//     if (!targetUser) {
+//       throw new Error("Target user not found.");
+//     }
+
+//     commissionCredits = await distributeRetopupCommission(
+//       targetUser,
+//       packageAmount,
+//       subscription._id,
+//       transaction._id
+//     );
+
+//     const updatedPayer = await User.findOne({
+//       userId: payerId
+//     }).select("walletBalance").lean();
+
+//     return {
+//       success: true,
+//       retopup: true,
+//       subscriptionId: subscription._id,
+//       transactionId: transaction._id,
+//       packageAmount,
+//       addedAllowance: packageAmount * 2,
+//       walletBalance: Number(updatedPayer?.walletBalance || 0)
+//     };
+
+//   } catch (error) {
+//     if (commissionCredits.length) {
+//       await rollbackPackageCommission(commissionCredits);
+//     }
+
+//     if (capUpdated) {
+//       await PackageSubscription.updateOne(
+//         { _id: subscription._id },
+//         {
+//           $inc: {
+//             accountingCapAmount: -(packageAmount * 2)
+//           }
+//         }
+//       );
+//     }
+
+//     if (transaction) {
+//       await Transaction.deleteOne({
+//         _id: transaction._id
+//       });
+//     }
+
+//     // Refund payer if retopup fails.
+//     await User.updateOne(
+//       { userId: payerId },
+//       {
+//         $inc: {
+//           walletBalance: packageAmount
+//         }
+//       }
+//     );
+
+//     throw error;
+//   }
+// }
 
 
 // ============================================================
-// STAGE 5 RETOPUP HELPER
-// Same subscription continues from Stage 6.
-// No new subscription and no commission on retopup.
+// NORMAL TOP-UP ROUTE
+// ============================================================
+ 
+// ============================================================
+// NORMAL TOP-UP ROUTE
+// Supports:
+// 1. First package
+// 2. Package upgrades
+// 3. Stage 5 same-package retopup
 // ============================================================
 
-// ============================================================
-// STAGE 5 SAME-PACKAGE RETOPUP
-// ============================================================
+
 
 async function processStageFiveRetopup({
   payerUserId,
   targetUserId,
   amount,
+  originalPackageAmount,
+  subscriptionId,
   minimumReserve = 0
 }) {
   const packageAmount = Number(amount);
   const payerId = Number(payerUserId);
   const targetId = Number(targetUserId);
   const reserve = Number(minimumReserve || 0);
+  const originalAmount = Number(originalPackageAmount);
 
-  if (
-    !Number.isFinite(packageAmount) ||
-    ![60, 120, 240, 480, 960].includes(packageAmount)
-  ) {
-    throw new Error(
-      "Retopup is allowed only for packages $60, $120, $240, $480 and $960."
-    );
+  // Validate retopup amount
+  if (![30, 60, 120, 240, 480, 960].includes(packageAmount)) {
+    throw new Error("Invalid retopup package amount.");
   }
 
+  // Validate user IDs
   if (
     !Number.isFinite(payerId) ||
     payerId <= 0 ||
@@ -1502,88 +1678,117 @@ async function processStageFiveRetopup({
     throw new Error("Invalid payer or target user ID.");
   }
 
+  // Validate wallet reserve
   if (!Number.isFinite(reserve) || reserve < 0) {
     throw new Error("Invalid minimum wallet reserve.");
   }
 
-  // ----------------------------------------------------------
-  // FIND EXACT SUBSCRIPTION WAITING FOR STAGE 6
-  // ----------------------------------------------------------
-
-  const subscription = await PackageSubscription.findOne({
-    userId: targetId,
-    packageAmount,
-    status: "ACTIVE",
-    currentStage: 6,
-    stage5RetopupConfirmed: false,
-    stage5RetopupTransactionId: null,
-
-    stages: {
-      $elemMatch: {
-        stageNumber: 5,
-        status: "ACHIEVED"
-      }
-    }
-  }).sort({ createdAt: -1 });
-
-  if (!subscription) {
-    throw new Error(
-      `No eligible $${packageAmount} subscription found. Stage 5 must be achieved and Stage 6 must be waiting for retopup.`
-    );
-  }
-
-  // ----------------------------------------------------------
-  // CHECK RETOPUP ALREADY USED
-  // ----------------------------------------------------------
-
+  // Validate original package amount
   if (
-    subscription.stage5RetopupConfirmed === true ||
-    subscription.stage5RetopupTransactionId ||
-    Number(subscription.stage5RetopupAmount || 0) > 0
+    !Number.isFinite(originalAmount) ||
+    ![30, 60, 120, 240, 480, 960].includes(originalAmount)
   ) {
-    throw new Error(
-      "Stage 5 retopup has already been completed for this subscription."
-    );
+    throw new Error("Invalid original package amount.");
   }
+
+  // =========================================================
+  // FIND EXACT ORIGINAL SUBSCRIPTION
+  // =========================================================
+
+  let subscription;
+
+  if (packageAmount === 30) {
+    // $30 retopup MUST use the exact $30 subscription ID.
+    // Never select the user's $60 or another package subscription.
+
+    if (!subscriptionId) {
+      throw new Error(
+        "Original $30 subscription ID is required for retopup."
+      );
+    }
+
+    subscription = await PackageSubscription.findOne({
+      _id: subscriptionId,
+      userId: targetId,
+      packageAmount: 30,
+      status: "ACTIVE"
+    });
+
+    if (!subscription) {
+      throw new Error(
+        "Selected active $30 subscription was not found."
+      );
+    }
+  } else {
+    // Preserve existing lookup behavior for other retopup amounts.
+    subscription = await PackageSubscription.findOne({
+      userId: targetId,
+      packageAmount: originalAmount,
+      status: "ACTIVE"
+    }).sort({ createdAt: -1 });
+
+    if (!subscription) {
+      throw new Error(
+        `No active $${originalAmount} original package subscription found.`
+      );
+    }
+  }
+
+  // =========================================================
+  // $30 RETOPUP ELIGIBILITY
+  // Stage 5 = ACHIEVED
+  // Stage 6 = WAITING or RUNNING
+  // Current Stage = 6
+  // =========================================================
+
+  if (packageAmount === 30) {
+    const stage5 = (subscription.stages || []).find(
+      stage => Number(stage.stageNumber) === 5
+    );
+
+    const stage6 = (subscription.stages || []).find(
+      stage => Number(stage.stageNumber) === 6
+    );
+
+    console.log("========== $30 RETOPUP DEBUG ==========");
+    console.log("Target User:", targetId);
+    console.log("Subscription ID:", String(subscription._id));
+    console.log("Original Package:", subscription.packageAmount);
+    console.log("Retopup Amount:", packageAmount);
+    console.log("Current Stage:", subscription.currentStage);
+    console.log("Stage 5 Status:", stage5?.status);
+    console.log("Stage 6 Status:", stage6?.status);
+    console.log("=======================================");
+
+    if (
+      Number(subscription.currentStage) !== 6 ||
+      String(stage5?.status) !== "ACHIEVED" ||
+      !["WAITING", "RUNNING"].includes(String(stage6?.status))
+    ) {
+      throw new Error(
+        "Your $30 retopup is allowed only after Stage 5 is achieved and Stage 6 is WAITING or RUNNING."
+      );
+    }
+  }
+
+  // =========================================================
+  // UNIQUE RETOPUP TRANSACTION ID
+  // =========================================================
+
+  const retopupId = new mongoose.Types.ObjectId();
 
   const idempotencyKey =
-    `${subscription._id.toString()}:stage5-retopup`;
+    `${subscription._id}:retopup:${retopupId}`;
 
-  const existingTransaction = await Transaction.findOne({
-    idempotencyKey
-  }).lean();
-
-  if (existingTransaction) {
-    throw new Error(
-      "Retopup transaction already exists for this subscription."
-    );
-  }
-
-  // ----------------------------------------------------------
-  // VERIFY PAYER EXISTS
-  // ----------------------------------------------------------
-
-  const payer = await User.findOne({
-    userId: payerId
-  })
-    .select("userId walletBalance")
-    .lean();
-
-  if (!payer) {
-    throw new Error("Payer account not found.");
-  }
-
-  // ----------------------------------------------------------
-  // ATOMIC WALLET DEDUCTION
-  // ----------------------------------------------------------
-
-  const requiredBalance = packageAmount + reserve;
+  // =========================================================
+  // DEBIT PAYER WALLET
+  // =========================================================
 
   const debitResult = await User.updateOne(
     {
       userId: payerId,
       walletBalance: {
-        $gte: requiredBalance
+        $gte: packageAmount + reserve
       }
     },
     {
@@ -1595,86 +1800,120 @@ async function processStageFiveRetopup({
 
   if (debitResult.modifiedCount !== 1) {
     throw new Error(
-      reserve > 0
-        ? `Insufficient wallet balance. Required $${packageAmount} retopup plus $${reserve} minimum reserve.`
-        : `Insufficient wallet balance. Required: $${packageAmount}.`
+      `Insufficient balance. Required $${packageAmount}` +
+      (reserve ? ` plus $${reserve} reserve.` : ".")
     );
   }
 
   let transaction = null;
-  let subscriptionUpdated = false;
+  let capUpdated = false;
+  let commissionCredits = [];
 
   try {
-    // --------------------------------------------------------
-    // CREATE CONFIRMED TRANSACTION
-    // --------------------------------------------------------
+    // =======================================================
+    // CREATE RETOPUP TRANSACTION
+    // =======================================================
 
     transaction = await Transaction.create({
+      _id: retopupId,
       userId: targetId,
-
       fromUserId: payerId,
       toUserId: targetId,
-
       type: "package_retopup",
-      source: "stage5_retopup",
-
+      source: "same_package_retopup",
       amount: packageAmount,
       package: packageAmount,
-
       subscriptionId: subscription._id,
       idempotencyKey,
-
-      description:
-        `Stage 5 retopup of $${packageAmount} for subscription ${subscription._id}`,
-
+      description: `Same package retopup $${packageAmount}`,
       status: "completed",
       date: new Date()
     });
 
-    // --------------------------------------------------------
-    // ATTACH PAYMENT TO ORIGINAL SUBSCRIPTION
-    // --------------------------------------------------------
+    // =======================================================
+    // RECHECK ELIGIBILITY DURING CAP UPDATE
+    // =======================================================
+
+    const eligibilityFilter = packageAmount === 30
+      ? {
+          currentStage: 6,
+          $and: [
+            {
+              stages: {
+                $elemMatch: {
+                  stageNumber: 5,
+                  status: "ACHIEVED"
+                }
+              }
+            },
+            {
+              stages: {
+                $elemMatch: {
+                  stageNumber: 6,
+                  status: {
+                    $in: ["WAITING", "RUNNING"]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      : {};
+
+    // =======================================================
+    // UPDATE SAME SUBSCRIPTION ACCOUNTING CAP
+    // No new subscription
+    // No cycle reset
+    // No stage reset
+    // No timer reset
+    // =======================================================
 
     const updateResult = await PackageSubscription.updateOne(
       {
         _id: subscription._id,
         userId: targetId,
-        packageAmount,
+        packageAmount: packageAmount === 30 ? 30 : originalAmount,
         status: "ACTIVE",
-        currentStage: 6,
-
-        stage5RetopupConfirmed: false,
-        stage5RetopupTransactionId: null,
-        stage5RetopupAmount: 0,
-
-        stages: {
-          $elemMatch: {
-            stageNumber: 5,
-            status: "ACHIEVED"
-          }
-        }
+        ...eligibilityFilter
       },
       {
-        $set: {
-          stage5RetopupAmount: packageAmount,
-          stage5RetopupPaidAt: transaction.date || new Date(),
-          stage5RetopupTransactionId: transaction._id,
-          stage5RetopupConfirmed: true
+        $inc: {
+          accountingCapAmount: packageAmount * 2
         }
       }
     );
 
     if (updateResult.modifiedCount !== 1) {
       throw new Error(
-        "Retopup could not be attached to the subscription. Payment is being rolled back."
+        "Retopup eligibility changed or subscription allowance update failed."
       );
     }
 
-    subscriptionUpdated = true;
+    capUpdated = true;
 
-    // --------------------------------------------------------
-    // GET UPDATED WALLET BALANCE
-    // --------------------------------------------------------
+    // =======================================================
+    // RETOPUP COMMISSION
+    // Existing logic: Direct Sponsor 25% + Nearest Leader 10%
+    // =======================================================
+
+    const targetUser = await User.findOne({
+      userId: targetId
+    });
+
+    if (!targetUser) {
+      throw new Error("Target user not found.");
+    }
+
+    commissionCredits = await distributeRetopupCommission(
+      targetUser,
+      packageAmount,
+      subscription._id,
+      transaction._id
+    );
+
+    // =======================================================
+    // GET UPDATED PAYER BALANCE
+    // =======================================================
 
     const updatedPayer = await User.findOne({
       userId: payerId
@@ -1685,55 +1924,52 @@ async function processStageFiveRetopup({
     return {
       success: true,
       retopup: true,
-
       subscriptionId: subscription._id,
       transactionId: transaction._id,
-
       packageAmount,
-
-      paidAt: transaction.date,
-
-      walletBalance: Number(
-        updatedPayer?.walletBalance || 0
-      )
+      addedAllowance: packageAmount * 2,
+      walletBalance: Number(updatedPayer?.walletBalance || 0)
     };
 
   } catch (error) {
-    // --------------------------------------------------------
-    // ROLLBACK SUBSCRIPTION UPDATE
-    // --------------------------------------------------------
+    // =======================================================
+    // ROLLBACK COMMISSION
+    // =======================================================
 
-    if (subscriptionUpdated && transaction) {
+    if (commissionCredits.length) {
+      await rollbackPackageCommission(commissionCredits);
+    }
+
+    // =======================================================
+    // ROLLBACK ACCOUNTING CAP
+    // =======================================================
+
+    if (capUpdated) {
       await PackageSubscription.updateOne(
         {
-          _id: subscription._id,
-          stage5RetopupTransactionId: transaction._id
+          _id: subscription._id
         },
         {
-          $set: {
-            stage5RetopupAmount: 0,
-            stage5RetopupPaidAt: null,
-            stage5RetopupTransactionId: null,
-            stage5RetopupConfirmed: false
+          $inc: {
+            accountingCapAmount: -(packageAmount * 2)
           }
         }
       );
     }
 
-    // --------------------------------------------------------
-    // REMOVE FAILED TRANSACTION
-    // --------------------------------------------------------
+    // =======================================================
+    // DELETE FAILED TRANSACTION
+    // =======================================================
 
     if (transaction) {
       await Transaction.deleteOne({
-        _id: transaction._id,
-        idempotencyKey
+        _id: transaction._id
       });
     }
 
-    // --------------------------------------------------------
+    // =======================================================
     // REFUND PAYER WALLET
-    // --------------------------------------------------------
+    // =======================================================
 
     await User.updateOne(
       {
@@ -1749,350 +1985,6 @@ async function processStageFiveRetopup({
     throw error;
   }
 }
-// ============================================================
-// NORMAL TOP-UP ROUTE
-// ============================================================
-
-// router.put("/topup/:userId", authMiddleware, async (req, res) => {
-//   let walletDebited = false;
-//   let packageSaved = false;
-//   let subscriptionId = null;
-//   let transactionId = null;
-//   let commissionCredits = [];
-
-//   let currentUserId = null;
-//   let targetUserId = null;
-//   let amount = 0;
-
-//   const now = new Date();
-
-//   try {
-//     targetUserId = Number(req.params.userId);
-//     amount = Number(req.body.amount);
-
-//     const { transactionPassword } = req.body;
-
-//     const packageSteps = [30, 60, 120, 240, 480, 960];
-
-//     if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-//       return res.status(400).json({
-//         message: "Invalid target user ID."
-//       });
-//     }
-
-//     if (!packageSteps.includes(amount)) {
-//       return res.status(400).json({
-//         message: "Invalid package amount."
-//       });
-//     }
-
-//     const currentUser = await User.findOne({
-//       userId: req.user.userId
-//     });
-
-//     if (!currentUser) {
-//       return res.status(404).json({
-//         message: "Current user not found."
-//       });
-//     }
-
-//     currentUserId = currentUser.userId;
-
-//     if (!transactionPassword) {
-//       return res.status(400).json({
-//         message: "Transaction password is required."
-//       });
-//     }
-
-//     if (
-//       !currentUser.transactionPassword ||
-//       String(transactionPassword).toLowerCase() !==
-//       String(currentUser.transactionPassword).toLowerCase()
-//     ) {
-//       return res.status(403).json({
-//         message: "Invalid transaction password."
-//       });
-//     }
-
-//     const targetUser = await User.findOne({
-//       userId: targetUserId
-//     });
-
-//     if (!targetUser) {
-//       return res.status(404).json({
-//         message: "Target user not found."
-//       });
-//     }
-
-//     if (targetUser.isBlocked) {
-//       return res.status(403).json({
-//         message: "This user account is blocked."
-//       });
-//     }
-
-//     // SELF OR DOWNLINE PERMISSION
-//     if (
-//       Number(currentUser.userId) !== targetUserId &&
-//       currentUser.role !== "admin"
-//     ) {
-//       let isDownline = false;
-//       let traceId = targetUser.sponsorId;
-//       let depth = 0;
-
-//       while (traceId && depth < 50) {
-//         if (Number(traceId) === Number(currentUser.userId)) {
-//           isDownline = true;
-//           break;
-//         }
-
-//         const upline = await User.findOne({
-//           userId: Number(traceId)
-//         }).select("sponsorId").lean();
-
-//         traceId = upline ? upline.sponsorId : null;
-//         depth++;
-//       }
-
-//       if (!isDownline) {
-//         return res.status(403).json({
-//           message: "You can only activate your own account or eligible downline."
-//         });
-//       }
-//     }
-
-//     // STRICT PACKAGE SEQUENCE
-//     const previousSubscriptions = await PackageSubscription.find({
-//       userId: targetUserId
-//     }).select("packageAmount").lean();
-
-//     const legacyPackages = Array.isArray(targetUser.packages)
-//       ? targetUser.packages
-//       : [];
-
-//     const subscriptionAmounts = previousSubscriptions.map(
-//       item => Number(item.packageAmount || 0)
-//     );
-
-//     const legacyAmounts = legacyPackages.map(
-//       item => Number(item.amount || 0)
-//     );
-
-//     const previousAmounts = [
-//       ...subscriptionAmounts,
-//       ...legacyAmounts,
-//       Number(targetUser.topUpAmount || 0)
-//     ].filter(value => packageSteps.includes(value));
-
-//     const highestPackage = previousAmounts.length
-//       ? Math.max(...previousAmounts)
-//       : 0;
-
-//     const currentIndex = packageSteps.indexOf(highestPackage);
-
-//     const nextPackage = highestPackage === 0
-//       ? packageSteps[0]
-//       : packageSteps[currentIndex + 1];
-
-//     if (!nextPackage) {
-//       return res.status(400).json({
-//         message: "You have already completed all package levels."
-//       });
-//     }
-
-//     if (amount !== nextPackage) {
-//       return res.status(400).json({
-//         message: `You must purchase the $${nextPackage} package next. Follow the package sequence.`
-//       });
-//     }
-
-//     const purchaseType = highestPackage === 0
-//       ? "FIRST_PURCHASE"
-//       : "UPGRADE";
-
-//     const cycleNumber = 1;
-
-//     // WALLET DEDUCTION
-//     const debitResult = await User.updateOne(
-//       {
-//         userId: currentUserId,
-//         walletBalance: { $gte: amount }
-//       },
-//       {
-//         $inc: { walletBalance: -amount }
-//       }
-//     );
-
-//     if (debitResult.modifiedCount !== 1) {
-//       return res.status(400).json({
-//         message: `Insufficient wallet balance. Required: $${amount}.`
-//       });
-//     }
-
-//     walletDebited = true;
-
-//     // SAVE PACKAGE
-//     const packageEntry = {
-//       plan: "Global Auto-Pool",
-//       amount,
-//       startDate: now,
-//       withdrawn: 0
-//     };
-
-//     targetUser.packages = targetUser.packages || [];
-//     targetUser.packages.push(packageEntry);
-
-//     targetUser.topUpAmount = Math.max(
-//       Number(targetUser.topUpAmount || 0),
-//       amount
-//     );
-
-//     targetUser.isToppedUp = true;
-
-//     if (!targetUser.topUpDate) {
-//       targetUser.topUpDate = now;
-//     }
-
-//     targetUser.updatedAt = now;
-
-//     await targetUser.save();
-//     packageSaved = true;
-
-//     // CREATE PACKAGE SUBSCRIPTION
-//     const subscription = await PackageSubscription.create({
-//       userId: targetUserId,
-//       packageAmount: amount,
-//       purchaseType,
-//       cycleNumber,
-//       status: "ACTIVE",
-//       purchasedAt: now,
-//       activatedAt: now,
-//       accountingCapAmount: amount * 2,
-//       recordedActivityAmount: 0,
-//       timer: {
-//         durationSeconds: 0,
-//         startedAt: null,
-//         endsAt: null,
-//         pausedAt: null,
-//         totalPausedSeconds: 0
-//       },
-//       notes: `Purchased by user ${currentUserId}`
-//     });
-
-//     subscriptionId = subscription._id;
-
-//     // TOP-UP TRANSACTION
-//     const transaction = await Transaction.create({
-//       userId: targetUserId,
-//       type: "topup",
-//       amount,
-//       fromUserId: currentUserId,
-//       toUserId: targetUserId,
-//       package: amount,
-//       plan: "Global Auto-Pool",
-//       description: `Package ${purchaseType}: $${amount}`,
-//       status: "completed",
-//       date: now
-//     });
-
-//     transactionId = transaction._id;
-
-//     subscription.transactionId = transaction._id;
-//     await subscription.save();
-
-//     // CREDIT DIRECT 25% + LEVEL 2-20
-//     commissionCredits = await distributePackageCommission(
-//       targetUser,
-//       amount,
-//       subscription._id
-//     );
-
-//     // SUCCESS
-//     commissionCredits = [];
-//     walletDebited = false;
-//     packageSaved = false;
-//     subscriptionId = null;
-//     transactionId = null;
-
-//     const freshWallet = await User.findOne({
-//       userId: currentUserId
-//     }).select("walletBalance").lean();
-
-//     return res.json({
-//       success: true,
-//       message: `Package of $${amount} activated successfully.`,
-//       package: {
-//         subscriptionId: subscription._id,
-//         userId: targetUserId,
-//         packageAmount: amount,
-//         purchaseType,
-//         cycleNumber,
-//         status: subscription.status
-//       },
-//       walletBalance: Number(freshWallet?.walletBalance || 0),
-//       transactionId: transaction._id
-//     });
-
-//   } catch (err) {
-//     console.error("Normal Top-up Error:", err);
-
-//     try {
-//       if (commissionCredits.length) {
-//         await rollbackPackageCommission(commissionCredits);
-//       }
-
-//       if (transactionId) {
-//         await Transaction.deleteOne({ _id: transactionId });
-//       }
-
-//       if (subscriptionId) {
-//         await PackageSubscription.deleteOne({
-//           _id: subscriptionId
-//         });
-//       }
-
-//       if (packageSaved) {
-//         await User.updateOne(
-//           { userId: targetUserId },
-//           {
-//             $pull: {
-//               packages: {
-//                 amount,
-//                 startDate: now,
-//                 plan: "Global Auto-Pool"
-//               }
-//             }
-//           }
-//         );
-//       }
-
-//       if (walletDebited && currentUserId) {
-//         await User.updateOne(
-//           { userId: currentUserId },
-//           {
-//             $inc: { walletBalance: amount }
-//           }
-//         );
-//       }
-
-//     } catch (rollbackError) {
-//       console.error("Top-up rollback error:", rollbackError);
-//     }
-
-//     if (!res.headersSent) {
-//       return res.status(500).json({
-//         message: "Top-up failed. Please check wallet and package records."
-//       });
-//     }
-//   }
-// });
-
-// ============================================================
-// NORMAL TOP-UP ROUTE
-// Supports:
-// 1. First package
-// 2. Package upgrades
-// 3. Stage 5 same-package retopup
-// ============================================================
 
 router.put("/topup/:userId", authMiddleware, async (req, res) => {
   let walletDebited = false;
@@ -2255,16 +2147,31 @@ router.put("/topup/:userId", authMiddleware, async (req, res) => {
      * It must be handled before strict package sequence.
      */
 
-    if (
-      amount > 30 &&
-      amount === highestPackage
-    ) {
-      const retopupResult = await processStageFiveRetopup({
-        payerUserId: currentUserId,
-        targetUserId,
-        amount,
-        minimumReserve: 0
-      });
+//    if (
+//   highestPackage > 0 &&
+//   amount === highestPackage
+// ) {
+//       const retopupResult = await processStageFiveRetopup({
+//         payerUserId: currentUserId,
+//         targetUserId,
+//         amount,
+//         minimumReserve: 0
+//       });
+
+
+if (
+  highestPackage > 0 &&
+  amount <= highestPackage
+) {
+  const retopupResult = await processStageFiveRetopup({
+    payerUserId: currentUserId,
+    targetUserId,
+    amount,
+    originalPackageAmount:
+      Number(amount) === 30 ? 30 : highestPackage,
+    subscriptionId: req.body.subscriptionId,
+    minimumReserve: 0
+  });
 
       return res.status(200).json({
         success: true,
@@ -2769,17 +2676,19 @@ router.put("/leader-topup/:userId", authMiddleware, async (req, res) => {
      * check for Stage 5 retopup before upgrade sequence.
      */
 
-    if (
-      amount > 30 &&
-      amount === highestPackage
-    ) {
-      const retopupResult = await processStageFiveRetopup({
-        payerUserId: currentUserId,
-        targetUserId,
-        amount,
-        minimumReserve: LEADER_MINIMUM_RESERVE
-      });
-
+ if (
+  highestPackage > 0 &&
+  amount <= highestPackage
+) {
+  const retopupResult = await processStageFiveRetopup({
+    payerUserId: currentUserId,
+    targetUserId,
+    amount,
+    originalPackageAmount:
+      Number(amount) === 30 ? 30 : highestPackage,
+    subscriptionId: req.body.subscriptionId,
+    minimumReserve: LEADER_MINIMUM_RESERVE
+  });
       const freshLeader = await User.findOne({
         userId: currentUserId
       })

@@ -906,10 +906,65 @@ const getPackageStageBalances = async (userId) => {
 };
 
 // Validate every selected package stage against its recorded earning.
+// const validatePackageStageItems = async (user, items) => {
+//   const stageItems = items.filter(
+//     item => item.source === "plan_stage"
+//   );
+
+//   for (const item of stageItems) {
+//     const subscription = await PackageSubscription.findOne({
+//       _id: item.subscriptionId,
+//       userId: user.userId
+//     });
+
+//     if (!subscription) {
+//       throw new Error("Selected package subscription was not found.");
+//     }
+
+//     const stage = (subscription.stages || []).find(
+//       entry => Number(entry.stageNumber) === item.stageNumber
+//     );
+
+//     if (!stage || String(stage.earningStatus) !== "RECORDED") {
+//       throw new Error(
+//         `Package stage ${item.stageNumber} has no recorded earning.`
+//       );
+//     }
+
+//     const earned = Number(stage.earningAmount) || 0;
+
+//     const withdrawnRows = await Transaction.find({
+//       userId: user.userId,
+//       source: "package_stage_withdrawal",
+//       subscriptionId: subscription._id,
+//       stageNumber: item.stageNumber,
+//       status: { $in: ["pending", "completed", "success"] }
+//     }).select("amount");
+
+//     const withdrawn = withdrawnRows.reduce(
+//       (sum, tx) =>
+//         sum + (Number(tx.amount?.toString?.() ?? tx.amount) || 0),
+//       0
+//     );
+
+//     const available = Math.max(0, earned - withdrawn);
+
+//     if (item.amount > available) {
+//       throw new Error(
+//         `Insufficient balance in Package $${subscription.packageAmount}, ` +
+//         `Stage ${item.stageNumber}. Available: $${available.toFixed(2)}.`
+//       );
+//     }
+//   }
+// };
+
+
 const validatePackageStageItems = async (user, items) => {
   const stageItems = items.filter(
     item => item.source === "plan_stage"
   );
+
+  const requestedBySubscription = new Map();
 
   for (const item of stageItems) {
     const subscription = await PackageSubscription.findOne({
@@ -922,7 +977,7 @@ const validatePackageStageItems = async (user, items) => {
     }
 
     const stage = (subscription.stages || []).find(
-      entry => Number(entry.stageNumber) === item.stageNumber
+      entry => Number(entry.stageNumber) === Number(item.stageNumber)
     );
 
     if (!stage || String(stage.earningStatus) !== "RECORDED") {
@@ -931,6 +986,7 @@ const validatePackageStageItems = async (user, items) => {
       );
     }
 
+    // Stage-wise earned balance.
     const earned = Number(stage.earningAmount) || 0;
 
     const withdrawnRows = await Transaction.find({
@@ -939,24 +995,80 @@ const validatePackageStageItems = async (user, items) => {
       subscriptionId: subscription._id,
       stageNumber: item.stageNumber,
       status: { $in: ["pending", "completed", "success"] }
-    }).select("amount");
+    }).select("amount grossAmount");
 
-    const withdrawn = withdrawnRows.reduce(
-      (sum, tx) =>
-        sum + (Number(tx.amount?.toString?.() ?? tx.amount) || 0),
-      0
-    );
+    const withdrawn = withdrawnRows.reduce((sum, tx) => {
+      const value = tx.grossAmount ?? tx.amount;
+      return sum + (Number(value?.toString?.() ?? value) || 0);
+    }, 0);
 
     const available = Math.max(0, earned - withdrawn);
 
-    if (item.amount > available) {
+    if (Number(item.amount) > available) {
       throw new Error(
         `Insufficient balance in Package $${subscription.packageAmount}, ` +
         `Stage ${item.stageNumber}. Available: $${available.toFixed(2)}.`
       );
     }
+
+    const key = String(subscription._id);
+    const previous = requestedBySubscription.get(key);
+
+    requestedBySubscription.set(key, {
+      subscription,
+      requested: (previous?.requested || 0) + Number(item.amount)
+    });
+  }
+
+  // =========================================
+  // CUMULATIVE CAP — PER SUBSCRIPTION
+  // =========================================
+
+  for (const [subscriptionId, data] of requestedBySubscription) {
+    const subscription = data.subscription;
+
+    // Existing records without a cap field use the original 2x cap.
+    const storedCap = subscription.accountingCapAmount;
+
+    const cap = (
+      storedCap === undefined || storedCap === null
+    )
+      ? Number(subscription.packageAmount) * 2
+      : Number(storedCap);
+
+    if (!Number.isFinite(cap) || cap < 0) {
+      throw new Error("Invalid package withdrawal cap.");
+    }
+
+    // Common ledger for withdrawal and credit-to-wallet.
+    // Do NOT count separate credit_to_wallet transaction rows.
+    const ledgerRows = await Transaction.find({
+      userId: user.userId,
+      source: "package_stage_withdrawal",
+      subscriptionId,
+      status: { $in: ["pending", "completed", "success"] }
+    }).select("amount grossAmount");
+
+    const alreadyUsed = ledgerRows.reduce((sum, tx) => {
+      const value = tx.grossAmount ?? tx.amount;
+      return sum + (Number(value?.toString?.() ?? value) || 0);
+    }, 0);
+
+    const remaining = Math.max(0, cap - alreadyUsed);
+
+    if (data.requested > remaining) {
+      throw new Error(
+        `Package $${subscription.packageAmount} cumulative cap exceeded. ` +
+        `Cap: $${cap.toFixed(2)}, ` +
+        `Used: $${alreadyUsed.toFixed(2)}, ` +
+        `Remaining: $${remaining.toFixed(2)}, ` +
+        `Requested: $${data.requested.toFixed(2)}.`
+      );
+    }
   }
 };
+
+
 
 // Create a separate ledger entry for every selected package stage.
 const createPackageStageWithdrawalLedger = async (
@@ -1013,86 +1125,7 @@ const getSourceDescription = (source) => {
 
 const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
 
-// async function checkPackageDirectEligibility(user, requiredPackage) {
-//   const userPackage = Number(requiredPackage);
-
-//   const PACKAGE_REQUIREMENTS = {
-//     30: 2,
-//     60: 4,
-//     120: 6,
-//     240: 8,
-//     480: 10,
-//     960: 12
-//   };
-
-//   const requiredDirects = PACKAGE_REQUIREMENTS[userPackage];
-
-//   if (!requiredDirects) {
-//     return {
-//       allowed: false,
-//       message: "Invalid package selected.",
-//       packageAmount: userPackage,
-//       matchingDirects: 0,
-//       requiredDirects: 0
-//     };
-//   }
-
-//   // Har package ke liye direct ka active package $30 hona chahiye.
-//   const directUsers = await User.find({
-//     sponsorId: user.userId
-//   })
-//     .select("userId topUpAmount packages")
-//     .lean();
-
-//   const directIds = directUsers.map(item => item.userId);
-
-//   const subscriptions = directIds.length
-//     ? await PackageSubscription.find({
-//         userId: { $in: directIds },
-//         packageAmount: 30,
-//         status: { $in: ["ACTIVE", "COMPLETED"] }
-//       })
-//         .select("userId packageAmount")
-//         .lean()
-//     : [];
-
-//   // Har direct ko sirf ek baar count karo.
-//   const matchingDirectIds = new Set(
-//     subscriptions.map(item => String(item.userId))
-//   );
-
-//   // Legacy package records support.
-//   for (const direct of directUsers) {
-//     const legacyAmounts = [
-//       Number(direct.topUpAmount || 0),
-//       ...(Array.isArray(direct.packages)
-//         ? direct.packages.map(item => Number(item.amount || 0))
-//         : [])
-//     ];
-
-//     if (legacyAmounts.includes(30)) {
-//       matchingDirectIds.add(String(direct.userId));
-//     }
-//   }
-
-//   const matchingDirects = matchingDirectIds.size;
-//   const allowed = matchingDirects >= requiredDirects;
-
-//   return {
-//     allowed,
-//     message: allowed
-//       ? "Package direct requirement completed."
-//       : `Your $${userPackage} package requires ${requiredDirects} direct referrals with an active $30 package. Matching: ${matchingDirects}/${requiredDirects}.`,
-//     packageAmount: userPackage,
-//     directPackage: 30,
-//     matchingDirects,
-//     requiredDirects
-//   };
-// }
-
-// Direct eligibility sirf selected package-stage subscription ke package par check hogi.
-// Normal direct/level/reward/pool income par package direct condition apply nahi hogi.
-
+ 
 
 async function checkPackageDirectEligibility(user, requiredPackage) {
   const userPackage = Number(requiredPackage);
@@ -1208,73 +1241,7 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
   };
 }
 
-
-// Direct eligibility for Plan Stage Income.
-// Normal income sources are not checked here.
-// async function checkSelectedPackageStageEligibility(user, items) {
-//   const stageItems = items.filter(
-//     item => item.source === "plan_stage"
-//   );
-
-//   const requiredPackages = new Set();
-
-//   for (const item of stageItems) {
-//     const subscription = await PackageSubscription.findOne({
-//       _id: item.subscriptionId,
-//       userId: user.userId
-//     }).select("packageAmount");
-
-//     if (!subscription) {
-//       throw new Error("Selected package subscription was not found.");
-//     }
-
-//     requiredPackages.add(Number(subscription.packageAmount));
-//   }
-
-//   for (const packageAmount of requiredPackages) {
-//     const eligibility = await checkPackageDirectEligibility(
-//       user,
-//       packageAmount
-//     );
-
-//     if (!eligibility.allowed) {
-//       return eligibility;
-//     }
-//   }
-
-//   return null;
-// }
-
-// function checkSelectedPackageStageEligibility(user, items) {
-//   const stageItems = items.filter(item => item.source === "plan_stage");
-//   const requiredPackages = new Set();
-
-//   for (const item of stageItems) {
-//     const subscription = await PackageSubscription.findOne({
-//       _id: item.subscriptionId,
-//       userId: user.userId
-//     }).select("packageAmount");
-
-//     if (!subscription) {
-//       throw new Error("Selected package subscription was not found.");
-//     }
-
-//     requiredPackages.add(Number(subscription.packageAmount));
-//   }
-
-//   for (const packageAmount of requiredPackages) {
-//     const eligibility = await checkPackageDirectEligibility(
-//       user,
-//       packageAmount
-//     );
-
-//     if (!eligibility.allowed) {
-//       return eligibility;
-//     }
-//   }
-
-//   return null;
-// }
+ 
 
 async function checkSelectedPackageStageEligibility(user, items) {
   const stageItems = items.filter(

@@ -157,7 +157,7 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
-    
+
     
     // ==========================================
 // FIRST TOP-UP TRACKING FOR ROYALTY
@@ -173,6 +173,23 @@ firstTopUpAmount: {
   default: 0,
   min: 0
 },
+
+retopupHistory: [{
+  amount: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  transactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Transaction",
+    required: true
+  },
+  paidAt: {
+    type: Date,
+    default: Date.now
+  }
+}],
 
 royaltyProcessedAt: {
   type: Date,

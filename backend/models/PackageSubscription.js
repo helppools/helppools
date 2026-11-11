@@ -1196,10 +1196,12 @@ const packageSubscriptionSchema = new mongoose.Schema({
 
   // Backward compatibility only.
   // These fields are NOT used for Stage 5 retopup.
-  accountingCapAmount: {
+ 
+
+   accountingCapAmount: {
     type: Number,
     default: function () {
-      return this.packageAmount * 2;
+      return Number(this.packageAmount) * 2;
     },
     min: 0
   },
@@ -1322,12 +1324,15 @@ packageSubscriptionSchema.index({
 });
 
 // Retopup lookup
+ 
+
+// Same-package retopup subscription lookup
 packageSubscriptionSchema.index({
   userId: 1,
   packageAmount: 1,
-  stage5RetopupConfirmed: 1
+  status: 1,
+  createdAt: -1
 });
-
 
 module.exports = mongoose.model(
   "PackageSubscription",
