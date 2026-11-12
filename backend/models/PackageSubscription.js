@@ -1058,17 +1058,31 @@ const DEFAULT_STAGE_DAYS = [
   30, 30, 30, 30
 ];
 
-const getStageDays = (packageAmount) => {
+// const getStageDays = (packageAmount) => {
+//   if (Number(packageAmount) === 30) {
+//     return [
+//       0.2, 0.2, 0.2, 0.2, 0.2,
+//       30, 30, 30, 30, 30,
+//       30, 30, 30, 30
+//     ];
+//   }
+
+//   return [...DEFAULT_STAGE_DAYS];
+// };
+
+
+function getStageDays(packageAmount) {
   if (Number(packageAmount) === 30) {
     return [
       0.2, 0.2, 0.2, 0.2, 0.2,
-      30, 30, 30, 30, 30,
+      1, // Stage 6 = 24 hours
+      30, 30, 30, 30,
       30, 30, 30, 30
     ];
   }
 
   return [...DEFAULT_STAGE_DAYS];
-};
+}
 
 const stageSchema = new mongoose.Schema({
   stageNumber: {
