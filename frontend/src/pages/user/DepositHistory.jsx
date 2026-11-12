@@ -732,8 +732,7 @@ const DepositHistory = () => {
                       <td className="px-4 py-4">
                         <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[9px] font-black uppercase tracking-wider text-emerald-800">
                           <ArrowDownCircle size={13} />
-                          {isManual ? "Manual Credit" : "Deposit"}
-                        </span>
+Deposit                        </span>
                       </td>
 
                       <td className="px-4 py-4 text-center">
@@ -763,12 +762,7 @@ const DepositHistory = () => {
                               )}
                             </button>
                           </div>
-
-                          {record.isGeneratedHash && (
-                            <span className="text-[9px] font-semibold text-amber-700">
-                              Generated reference · Not verified on-chain
-                            </span>
-                          )}
+ 
                         </div>
                       </td>
 
@@ -878,8 +872,7 @@ const DepositHistory = () => {
                   <div className="flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[9px] font-black uppercase tracking-wider text-emerald-800">
                       <ArrowDownCircle size={13} />
-                      {isManual ? "Manual Credit" : "Deposit"}
-                    </span>
+Deposit                    </span>
 
                     <div className="text-right">
                       <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
@@ -923,11 +916,7 @@ const DepositHistory = () => {
                       </button>
                     </div>
 
-                    {record.isGeneratedHash && (
-                      <p className="mt-2 text-[9px] font-semibold text-amber-700">
-                        Generated reference · Not verified on-chain
-                      </p>
-                    )}
+               
 
                     <a
                       href={`https://bscscan.com/tx/${hash}`}
