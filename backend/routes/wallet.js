@@ -352,107 +352,867 @@ router.post('/usdt-bep20-transfer', authMiddleware, async (req, res) => {
 
  
 
-router.post('/transfer', async (req, res) => {
-  try {
-    const { fromUserId, toUserId, amount, transactionPassword } = req.body;
+// router.post('/transfer', async (req, res) => {
+//   try {
+//     const { fromUserId, toUserId, amount, transactionPassword } = req.body;
 
-    const settings = await getSettings();
-    if (!settings?.allowWalletTransfer) {
-      return res.status(403).json({ message: 'Transfers are currently disabled in the system' });
-    }
+//     const settings = await getSettings();
+//     if (!settings?.allowWalletTransfer) {
+//       return res.status(403).json({ message: 'Transfers are currently disabled in the system' });
+//     }
 
-    const [sender, receiver] = await Promise.all([
-      User.findOne({ userId: Number(fromUserId) }),
-      User.findOne({ userId: Number(toUserId) }),
-    ]);
+//     const [sender, receiver] = await Promise.all([
+//       User.findOne({ userId: Number(fromUserId) }),
+//       User.findOne({ userId: Number(toUserId) }),
+//     ]);
 
-    if (!sender) return res.status(404).json({ message: 'Sender not found' });
-    if (!receiver) return res.status(404).json({ message: 'Recipient not found' });
+//     if (!sender) return res.status(404).json({ message: 'Sender not found' });
+//     if (!receiver) return res.status(404).json({ message: 'Recipient not found' });
 
-    const amt = Number(amount);
+//     const amt = Number(amount);
     
-    // ✨ LIMIT CHANGED: Ab minimum $10 ka transfer ho sakta hai
-    if (amt < 10) return res.status(400).json({ message: "Minimum transfer amount is $10" });
+//     // ✨ LIMIT CHANGED: Ab minimum $10 ka transfer ho sakta hai
+//     if (amt < 10) return res.status(400).json({ message: "Minimum transfer amount is $10" });
 
-    // ✨ INTEGER CHECK: Koi decimal nahi chalega (Sirf round figures: 10, 11, 12, 13... allow hoga)
-    if (amt % 1 !== 0) return res.status(400).json({ message: "Decimals not allowed. Please enter a whole number (e.g., 10, 11, 12)." });
+//     // ✨ INTEGER CHECK: Koi decimal nahi chalega (Sirf round figures: 10, 11, 12, 13... allow hoga)
+//     if (amt % 1 !== 0) return res.status(400).json({ message: "Decimals not allowed. Please enter a whole number (e.g., 10, 11, 12)." });
 
-    // 🔥 PROMO USER LOGIC START
-    if (sender.role === "promo") {
-      return res.json({ message: 'Transfer successful (Promo Mode)' });
-    }
-    // 🔥 PROMO USER LOGIC END
+//     // 🔥 PROMO USER LOGIC START
+//     if (sender.role === "promo") {
+//       return res.json({ message: 'Transfer successful (Promo Mode)' });
+//     }
+//     // 🔥 PROMO USER LOGIC END
 
-    // ============================================
-    // 🛡️ NORMAL USER CHECKS START
-    // ============================================
+//     // ============================================
+//     // 🛡️ NORMAL USER CHECKS START
+//     // ============================================
 
-    // 1. Password Check (Capital/Small issue fixed)
-    const isPasswordValid = (transactionPassword.toLowerCase() === sender.transactionPassword.toLowerCase());
-    if (!isPasswordValid) {
-      return res.status(400).json({ message: 'Invalid transaction password' });
-    }
+//     // 1. Password Check (Capital/Small issue fixed)
+//     const isPasswordValid = (transactionPassword.toLowerCase() === sender.transactionPassword.toLowerCase());
+//     if (!isPasswordValid) {
+//       return res.status(400).json({ message: 'Invalid transaction password' });
+//     }
 
-    // 2. Balance Check
-    if (sender.walletBalance < amt) {
-      return res.status(400).json({ message: 'Insufficient balance' });
-    }
+//     // 2. Balance Check
+//     if (sender.walletBalance < amt) {
+//       return res.status(400).json({ message: 'Insufficient balance' });
+//     }
 
-    // 3. ✨ STRICT DOWNLINE CHECK (Sirf Downline me transfer allow hoga)
-    let isDownline = false;
-    let currentSponsorId = receiver.sponsorId;
-    let depth = 0;
-    const maxDepth = 1000; // Infinite loop se bachne ke liye limit
+//     // 3. ✨ STRICT DOWNLINE CHECK (Sirf Downline me transfer allow hoga)
+//     let isDownline = false;
+//     let currentSponsorId = receiver.sponsorId;
+//     let depth = 0;
+//     const maxDepth = 1000; // Infinite loop se bachne ke liye limit
 
-    while (currentSponsorId && depth < maxDepth) {
-      if (Number(currentSponsorId) === Number(sender.userId)) {
-        isDownline = true; // Mil gaya! Sender iska upline hai (Yani Receiver downline me hai)
-        break;
-      }
+//     while (currentSponsorId && depth < maxDepth) {
+//       if (Number(currentSponsorId) === Number(sender.userId)) {
+//         isDownline = true; // Mil gaya! Sender iska upline hai (Yani Receiver downline me hai)
+//         break;
+//       }
       
-      // Upar ki taraf search badhao
-      const uplineUser = await User.findOne({ userId: Number(currentSponsorId) }).lean();
-      if (!uplineUser) break; // Agar koi upline na mile to break
+//       // Upar ki taraf search badhao
+//       const uplineUser = await User.findOne({ userId: Number(currentSponsorId) }).lean();
+//       if (!uplineUser) break; // Agar koi upline na mile to break
       
-      currentSponsorId = uplineUser.sponsorId;
-      depth++;
-    }
+//       currentSponsorId = uplineUser.sponsorId;
+//       depth++;
+//     }
 
-    if (!isDownline) {
-      return res.status(403).json({ message: 'Transfer restricted. You can only transfer funds to your downline members.' });
-    }
+//     if (!isDownline) {
+//       return res.status(403).json({ message: 'Transfer restricted. You can only transfer funds to your downline members.' });
+//     }
 
-    // ============================================
-    // 💸 TRANSFER EXECUTION
-    // ============================================
-    sender.walletBalance -= amt;
-    receiver.walletBalance += amt;
+//     // ============================================
+//     // 💸 TRANSFER EXECUTION
+//     // ============================================
+//     sender.walletBalance -= amt;
+//     receiver.walletBalance += amt;
 
-    await sender.save();
-    await receiver.save();
+//     await sender.save();
+//     await receiver.save();
 
-    await Transaction.create({
-      userId: sender.userId,
-      type: 'transfer',
-      fromUserId: sender.userId,
-      toUserId: receiver.userId,
-      amount: amt,
-      grossAmount: amt,
-      description: `Transfer from ${sender.userId} to ${receiver.userId}`,
-    });
+//     await Transaction.create({
+//       userId: sender.userId,
+//       type: 'transfer',
+//       fromUserId: sender.userId,
+//       toUserId: receiver.userId,
+//       amount: amt,
+//       grossAmount: amt,
+//       description: `Transfer from ${sender.userId} to ${receiver.userId}`,
+//     });
 
-    res.json({ message: 'Transfer successful' });
+//     res.json({ message: 'Transfer successful' });
 
-  } catch (err) {
-    console.error("Transfer error:", err);
-    res.status(500).json({ message: 'Transfer failed' });
-  }
-});
+//   } catch (err) {
+//     console.error("Transfer error:", err);
+//     res.status(500).json({ message: 'Transfer failed' });
+//   }
+// });
+
+
+
+
+// router.post(
+//   '/leader-transfer',
+//   authMiddleware,
+//   async (req, res) => {
+//     try {
+//       const { toUserId, amount, transactionPassword } = req.body;
+//       const fromUserId = req.user.userId;
+
+//       // Amount ko Number me convert kar lete hain taaki validation sahi se ho
+//       const transferAmount = Number(amount);
+
+//       // 🔥 1. MINIMUM $10 CHECK
+//       if (!toUserId || !transferAmount || transferAmount < 10) {
+//         return res.status(400).json({ message: " Minimum transfer amount is $10." });
+//       }
+
+//       // 🔥 2. INTEGER CHECK (10, 11, 12 allowed, 10.5 nahi)
+//       if (!Number.isInteger(transferAmount)) {
+//         return res.status(400).json({ message: "Transfer amount must be a whole number (e.g., 10, 11, 12). Decimals are not allowed." });
+//       }
+
+//       if (!transactionPassword) {
+//         return res.status(400).json({ message: "Transaction password is required." });
+//       }
+
+//       // 🔹 1. Leader (Sender) Check
+//       const sender = await User.findOne({ userId: fromUserId });
+//       if (!sender) return res.status(404).json({ message: "Sender not found." });
+
+//       if (sender.role !== 'leader') {
+//           return res.status(403).json({ message: "Access denied. Only leaders can use this route." });
+//       }
+
+//       const isValidPassword = (transactionPassword.toLowerCase() === sender.transactionPassword.toLowerCase());
+//       if (!isValidPassword) return res.status(403).json({ message: "Invalid transaction password." });
+
+//       if (String(fromUserId) === String(toUserId)) {
+//         return res.status(400).json({ message: "You cannot transfer funds to yourself." });
+//       }
+
+//       const receiver = await User.findOne({ userId: toUserId });
+//       if (!receiver) return res.status(404).json({ message: "Target user not found." });
+
+//       // =======================================================
+//       // 🔹 2. 🔥 DOWNLINE ONLY CHECK (No Upline / No Crossline)
+//       // =======================================================
+//       let isDownline = false;
+//       const isDirectReferral = Number(receiver.sponsorId) === Number(sender.userId);
+
+//       if (isDirectReferral) {
+//           isDownline = true;
+//       } else {
+//           // Upar ki taraf check karenge ki target user ke upline me sender aata hai ya nahi
+//           let checkUplineId = receiver.sponsorId;
+//           let depth = 1;
+//           // Maximum 50 levels tak check karega
+//           while (checkUplineId && depth <= 50) {
+//               if (Number(checkUplineId) === Number(sender.userId)) {
+//                   isDownline = true;
+//                   break;
+//               }
+//               const nextNode = await User.findOne({ userId: checkUplineId }).select('sponsorId');
+//               if (!nextNode) break;
+//               checkUplineId = nextNode.sponsorId;
+//               depth++;
+//           }
+//       }
+
+//       if (!isDownline) {
+//           return res.status(403).json({ 
+//               message: "Action Denied! You can only transfer funds to your own Downline. Upline or Crossline transfer is restricted." 
+//           });
+//       }
+
+//       // =======================================================
+//       // 🔹 3. 🔥 NORMAL BALANCE CHECK (Removed $30 Lock)
+//       // =======================================================
+//       if (transferAmount > sender.walletBalance) {
+//         return res.status(400).json({ 
+//           message: "Insufficient Wallet Balance!" 
+//         });
+//       }
+
+//       // 🔹 4. Deduct and Add
+//       sender.walletBalance -= transferAmount;
+//       receiver.walletBalance += transferAmount;
+
+//       await sender.save();
+//       await receiver.save();
+
+//       // 🔹 5. Create Transactions
+//       const Transaction = require('../models/Transaction');
+
+//       await Transaction.create({
+//         userId: sender.userId,
+//         type: "transfer",
+//         amount: transferAmount,
+//         fromUserId: sender.userId,
+//         toUserId: receiver.userId,
+//         description: `Fund Transferred to ${receiver.name} (${receiver.userId})`,
+//         status: "success",
+//         date: new Date()
+//       });
+
+//       await Transaction.create({
+//         userId: receiver.userId,
+//         type: "transfer",
+//         amount: transferAmount,
+//         fromUserId: sender.userId,
+//         toUserId: receiver.userId,
+//         description: `Fund Received from ${sender.name} (${sender.userId})`,
+//         status: "success",
+//         date: new Date()
+//       });
+
+//       res.status(200).json({
+//         success: true,
+//         message: `$${transferAmount} successfully transferred to ${receiver.userId}.`
+//       });
+
+//     } catch (error) {
+//       console.error("Leader Transfer Error:", error);
+//       res.status(500).json({ message: "Server error during leader transfer." });
+//     }
+//   }
+// );
 
 
 // ==========================================
 // 🔥 PROMO USER TRANSFER API (Auto Generate ID & Name)
 // ==========================================
+
+
+/*
+ * Secure Wallet Transfer Routes
+ * Minimum leader wallet reserve: $30
+ * Minimum transfer: $10
+ *
+ * Existing declarations required:
+ * router, authMiddleware, User, Transaction, getSettings
+ */
+
+// =====================================================
+// WALLET TRANSFER HELPERS
+// NO MONGODB TRANSACTIONS / NO SESSION
+// =====================================================
+
+const LEADER_MINIMUM_RESERVE = 30;
+const MINIMUM_TRANSFER_AMOUNT = 10;
+
+function isValidWholeTransferAmount(value) {
+  const amount = Number(value);
+  return Number.isSafeInteger(amount) &&
+    amount >= MINIMUM_TRANSFER_AMOUNT;
+}
+
+function isTransactionPasswordValid(inputPassword, savedPassword) {
+  return (
+    typeof inputPassword === "string" &&
+    typeof savedPassword === "string" &&
+    inputPassword.length > 0 &&
+    typeof savedPassword === "string" &&
+    inputPassword.toLowerCase() === savedPassword.toLowerCase()
+  );
+}
+
+// Check whether recipient belongs to sender's downline
+async function isReceiverDownlineOf(
+  senderUserId,
+  receiver,
+  maxDepth = 1000
+) {
+  let sponsorId = receiver.sponsorId;
+  let depth = 0;
+  const visited = new Set();
+
+  while (sponsorId && depth < maxDepth) {
+    const sponsorKey = String(sponsorId);
+
+    if (sponsorKey === String(senderUserId)) {
+      return true;
+    }
+
+    if (visited.has(sponsorKey)) {
+      return false;
+    }
+
+    visited.add(sponsorKey);
+
+    const sponsor = await User.findOne({
+      userId: Number(sponsorId)
+    }).select("sponsorId").lean();
+
+    if (!sponsor) return false;
+
+    sponsorId = sponsor.sponsorId;
+    depth++;
+  }
+
+  return false;
+}
+
+// Roll back wallet changes if a later operation fails.
+// Returns false if rollback could not be completed.
+async function rollbackWalletTransfer({
+  senderUserId,
+  receiverUserId,
+  amount,
+  senderCredited,
+  receiverDebited
+}) {
+  try {
+    // Remove the amount credited to receiver first.
+    if (receiverDebited) {
+      const receiverRollback = await User.updateOne(
+        {
+          userId: receiverUserId,
+          walletBalance: { $gte: amount }
+        },
+        {
+          $inc: { walletBalance: -amount }
+        }
+      );
+
+      if (receiverRollback.modifiedCount !== 1) {
+        console.error(
+          "CRITICAL: Receiver rollback failed. Manual balance review required.",
+          { senderUserId, receiverUserId, amount }
+        );
+        return false;
+      }
+    }
+
+    // Refund sender.
+    if (senderCredited) {
+      const senderRollback = await User.updateOne(
+        { userId: senderUserId },
+        { $inc: { walletBalance: amount } }
+      );
+
+      if (senderRollback.modifiedCount !== 1) {
+        console.error(
+          "CRITICAL: Sender refund failed. Manual balance review required.",
+          { senderUserId, receiverUserId, amount }
+        );
+        return false;
+      }
+    }
+
+    return true;
+  } catch (rollbackError) {
+    console.error("CRITICAL WALLET ROLLBACK ERROR:", rollbackError);
+    return false;
+  }
+}
+
+
+// =====================================================
+// NORMAL WALLET TRANSFER
+// =====================================================
+
+router.post("/transfer", authMiddleware, async (req, res) => {
+  let senderDebited = false;
+  let receiverCredited = false;
+
+  let senderUserId;
+  let recipientId;
+  let amt;
+
+  try {
+    const {
+      toUserId,
+      amount,
+      transactionPassword
+    } = req.body;
+
+    // Sender ID comes only from authenticated token.
+    senderUserId = Number(req.user?.userId);
+    recipientId = Number(toUserId);
+    amt = Number(amount);
+
+    if (!Number.isSafeInteger(senderUserId) || senderUserId <= 0) {
+      return res.status(401).json({
+        message: "Authentication required."
+      });
+    }
+
+    if (!Number.isSafeInteger(recipientId) || recipientId <= 0) {
+      return res.status(400).json({
+        message: "A valid recipient User ID is required."
+      });
+    }
+
+    if (recipientId === senderUserId) {
+      return res.status(400).json({
+        message: "You cannot transfer funds to yourself."
+      });
+    }
+
+    if (!isValidWholeTransferAmount(amt)) {
+      return res.status(400).json({
+        message: "Minimum transfer amount is $10 and decimals are not allowed."
+      });
+    }
+
+    if (
+      typeof transactionPassword !== "string" ||
+      !transactionPassword
+    ) {
+      return res.status(400).json({
+        message: "Transaction password is required."
+      });
+    }
+
+    const settings = await getSettings();
+
+    if (!settings?.allowWalletTransfer) {
+      return res.status(403).json({
+        message: "Transfers are currently disabled in the system."
+      });
+    }
+
+    const sender = await User.findOne({
+      userId: senderUserId
+    });
+
+    if (!sender) {
+      return res.status(404).json({
+        message: "Sender not found."
+      });
+    }
+
+    const receiver = await User.findOne({
+      userId: recipientId
+    });
+
+    if (!receiver) {
+      return res.status(404).json({
+        message: "Recipient not found."
+      });
+    }
+
+    // Leaders must use the protected leader-transfer route.
+    if (String(sender.role || "").toLowerCase() === "leader") {
+      return res.status(403).json({
+        message: "Leaders must use the leader transfer route."
+      });
+    }
+
+    if (String(sender.role || "").toLowerCase() === "promo") {
+      return res.status(403).json({
+        message: "Promo users must use the promo transfer route."
+      });
+    }
+
+    if (
+      !isTransactionPasswordValid(
+        transactionPassword,
+        sender.transactionPassword
+      )
+    ) {
+      return res.status(403).json({
+        message: "Invalid transaction password."
+      });
+    }
+
+    const allowed = await isReceiverDownlineOf(
+      sender.userId,
+      receiver,
+      1000
+    );
+
+    if (!allowed) {
+      return res.status(403).json({
+        message: "Transfer restricted. You can only transfer funds to your downline members."
+      });
+    }
+
+    // Atomic sender debit. Prevents spending the same balance twice.
+    const debitResult = await User.updateOne(
+      {
+        userId: senderUserId,
+        walletBalance: { $gte: amt }
+      },
+      {
+        $inc: { walletBalance: -amt }
+      }
+    );
+
+    if (debitResult.modifiedCount !== 1) {
+      return res.status(400).json({
+        message: "Insufficient wallet balance."
+      });
+    }
+
+    senderDebited = true;
+
+    // Atomic receiver credit.
+    const creditResult = await User.updateOne(
+      { userId: recipientId },
+      { $inc: { walletBalance: amt } }
+    );
+
+    if (creditResult.modifiedCount !== 1) {
+      const rolledBack = await rollbackWalletTransfer({
+        senderUserId,
+        receiverUserId: recipientId,
+        amount: amt,
+        senderCredited: true,
+        receiverDebited: false
+      });
+
+      senderDebited = false;
+
+      if (!rolledBack) {
+        return res.status(500).json({
+          message: "Transfer failed and automatic refund needs manual review. Please contact support."
+        });
+      }
+
+      return res.status(404).json({
+        message: "Recipient not found. Your wallet has been refunded."
+      });
+    }
+
+    receiverCredited = true;
+
+    try {
+      await Transaction.create({
+        userId: senderUserId,
+        type: "transfer",
+        fromUserId: senderUserId,
+        toUserId: recipientId,
+        amount: amt,
+        grossAmount: amt,
+        description: `Transfer from ${senderUserId} to ${recipientId}`,
+        status: "success",
+        date: new Date()
+      });
+    } catch (transactionError) {
+      console.error("Transfer transaction record error:", transactionError);
+
+      const rolledBack = await rollbackWalletTransfer({
+        senderUserId,
+        receiverUserId: recipientId,
+        amount: amt,
+        senderCredited: true,
+        receiverDebited: true
+      });
+
+      senderDebited = false;
+      receiverCredited = false;
+
+      return res.status(500).json({
+        message: rolledBack
+          ? "Transfer failed. Wallet balances have been restored."
+          : "Transfer failed. Automatic rollback needs manual review. Contact support."
+      });
+    }
+
+    const updatedSender = await User.findOne({
+      userId: senderUserId
+    }).select("walletBalance").lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Transfer successful.",
+      walletBalance: updatedSender?.walletBalance
+    });
+
+  } catch (err) {
+    console.error("Transfer error:", err);
+
+    // Compensate if an unexpected error occurs after wallet updates.
+    if (senderDebited || receiverCredited) {
+      const rolledBack = await rollbackWalletTransfer({
+        senderUserId,
+        receiverUserId: recipientId,
+        amount: amt,
+        senderCredited: senderDebited,
+        receiverDebited: receiverCredited
+      });
+
+      if (!rolledBack) {
+        return res.status(500).json({
+          message: "Transfer error. Automatic rollback needs manual review. Contact support."
+        });
+      }
+    }
+
+    return res.status(500).json({
+      message: "Transfer failed. Please try again."
+    });
+  }
+});
+
+
+// =====================================================
+// LEADER WALLET TRANSFER - MANDATORY $30 RESERVE
+// =====================================================
+
+router.post("/leader-transfer", authMiddleware, async (req, res) => {
+  let senderDebited = false;
+  let receiverCredited = false;
+
+  let senderUserId;
+  let recipientId;
+  let transferAmount;
+
+  try {
+    const {
+      toUserId,
+      amount,
+      transactionPassword
+    } = req.body;
+
+    senderUserId = Number(req.user?.userId);
+    recipientId = Number(toUserId);
+    transferAmount = Number(amount);
+
+    if (!Number.isSafeInteger(senderUserId) || senderUserId <= 0) {
+      return res.status(401).json({
+        message: "Authentication required."
+      });
+    }
+
+    if (!Number.isSafeInteger(recipientId) || recipientId <= 0) {
+      return res.status(400).json({
+        message: "A valid recipient User ID is required."
+      });
+    }
+
+    if (recipientId === senderUserId) {
+      return res.status(400).json({
+        message: "You cannot transfer funds to yourself."
+      });
+    }
+
+    if (!isValidWholeTransferAmount(transferAmount)) {
+      return res.status(400).json({
+        message: "Minimum transfer amount is $10. Decimals are not allowed."
+      });
+    }
+
+    if (
+      typeof transactionPassword !== "string" ||
+      !transactionPassword
+    ) {
+      return res.status(400).json({
+        message: "Transaction password is required."
+      });
+    }
+
+    const settings = await getSettings();
+
+    if (!settings?.allowWalletTransfer) {
+      return res.status(403).json({
+        message: "Transfers are currently disabled in the system."
+      });
+    }
+
+    const sender = await User.findOne({
+      userId: senderUserId
+    });
+
+    if (!sender) {
+      return res.status(404).json({
+        message: "Sender not found."
+      });
+    }
+
+    if (String(sender.role || "").toLowerCase() !== "leader") {
+      return res.status(403).json({
+        message: "Access denied. Only leaders can use this route."
+      });
+    }
+
+    const receiver = await User.findOne({
+      userId: recipientId
+    });
+
+    if (!receiver) {
+      return res.status(404).json({
+        message: "Target user not found."
+      });
+    }
+
+    if (
+      !isTransactionPasswordValid(
+        transactionPassword,
+        sender.transactionPassword
+      )
+    ) {
+      return res.status(403).json({
+        message: "Invalid transaction password."
+      });
+    }
+
+    const allowed = await isReceiverDownlineOf(
+      sender.userId,
+      receiver,
+      50
+    );
+
+    if (!allowed) {
+      return res.status(403).json({
+        message: "You can only transfer funds to your own downline. Upline or crossline transfers are restricted."
+      });
+    }
+
+    // Atomic debit with mandatory $30 reserve.
+    // Balance must be >= transfer amount + $30.
+    const minimumRequiredBalance =
+      transferAmount + LEADER_MINIMUM_RESERVE;
+
+    const debitResult = await User.updateOne(
+      {
+        userId: senderUserId,
+        role: "leader",
+        walletBalance: { $gte: minimumRequiredBalance }
+      },
+      {
+        $inc: { walletBalance: -transferAmount }
+      }
+    );
+
+    if (debitResult.modifiedCount !== 1) {
+      const latestSender = await User.findOne({
+        userId: senderUserId
+      }).select("walletBalance").lean();
+
+      const currentBalance = Number(latestSender?.walletBalance || 0);
+      const maximumTransfer = Math.max(
+        0,
+        currentBalance - LEADER_MINIMUM_RESERVE
+      );
+
+      return res.status(400).json({
+        message: `Minimum $30 must remain in your wallet. Maximum transferable amount is $${maximumTransfer.toFixed(2)}.`
+      });
+    }
+
+    senderDebited = true;
+
+    // Atomic receiver credit.
+    const creditResult = await User.updateOne(
+      { userId: recipientId },
+      { $inc: { walletBalance: transferAmount } }
+    );
+
+    if (creditResult.modifiedCount !== 1) {
+      const rolledBack = await rollbackWalletTransfer({
+        senderUserId,
+        receiverUserId: recipientId,
+        amount: transferAmount,
+        senderCredited: true,
+        receiverDebited: false
+      });
+
+      senderDebited = false;
+
+      if (!rolledBack) {
+        return res.status(500).json({
+          message: "Transfer failed and automatic refund needs manual review. Please contact support."
+        });
+      }
+
+      return res.status(404).json({
+        message: "Target user not found. Your wallet has been refunded."
+      });
+    }
+
+    receiverCredited = true;
+
+    // Create sender and receiver history records.
+    try {
+      await Transaction.create([
+        {
+          userId: senderUserId,
+          type: "transfer",
+          amount: transferAmount,
+          grossAmount: transferAmount,
+          fromUserId: senderUserId,
+          toUserId: recipientId,
+          description: `Fund Transferred to ${receiver.name} (${receiver.userId})`,
+          status: "success",
+          date: new Date()
+        },
+        {
+          userId: recipientId,
+          type: "transfer",
+          amount: transferAmount,
+          grossAmount: transferAmount,
+          fromUserId: senderUserId,
+          toUserId: recipientId,
+          description: `Fund Received from ${sender.name} (${sender.userId})`,
+          status: "success",
+          date: new Date()
+        }
+      ]);
+    } catch (transactionError) {
+      console.error("Leader transfer transaction record error:", transactionError);
+
+      const rolledBack = await rollbackWalletTransfer({
+        senderUserId,
+        receiverUserId: recipientId,
+        amount: transferAmount,
+        senderCredited: true,
+        receiverDebited: true
+      });
+
+      senderDebited = false;
+      receiverCredited = false;
+
+      return res.status(500).json({
+        message: rolledBack
+          ? "Transfer failed. Wallet balances have been restored."
+          : "Transfer failed. Automatic rollback needs manual review. Contact support."
+      });
+    }
+
+    const updatedSender = await User.findOne({
+      userId: senderUserId
+    }).select("walletBalance").lean();
+
+    return res.status(200).json({
+      success: true,
+      message: `$${transferAmount} successfully transferred to ${recipientId}.`,
+      walletBalance: updatedSender?.walletBalance,
+      minimumReserve: LEADER_MINIMUM_RESERVE
+    });
+
+  } catch (error) {
+    console.error("Leader Transfer Error:", error);
+
+    if (senderDebited || receiverCredited) {
+      const rolledBack = await rollbackWalletTransfer({
+        senderUserId,
+        receiverUserId: recipientId,
+        amount: transferAmount,
+        senderCredited: senderDebited,
+        receiverDebited: receiverCredited
+      });
+
+      if (!rolledBack) {
+        return res.status(500).json({
+          message: "Transfer error. Automatic rollback needs manual review. Contact support."
+        });
+      }
+    }
+
+    return res.status(500).json({
+      message: "Server error during leader transfer."
+    });
+  }
+});
+
+
+
+
+
 router.post("/promo-transfer", authMiddleware, async (req, res) => {
   try {
     const { amount, transactionPassword } = req.body;
@@ -567,134 +1327,6 @@ router.post("/promo-transfer", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Server processing error: " + err.message });
   }
 }); 
-
-router.post(
-  '/leader-transfer',
-  authMiddleware,
-  async (req, res) => {
-    try {
-      const { toUserId, amount, transactionPassword } = req.body;
-      const fromUserId = req.user.userId;
-
-      // Amount ko Number me convert kar lete hain taaki validation sahi se ho
-      const transferAmount = Number(amount);
-
-      // 🔥 1. MINIMUM $10 CHECK
-      if (!toUserId || !transferAmount || transferAmount < 10) {
-        return res.status(400).json({ message: " Minimum transfer amount is $10." });
-      }
-
-      // 🔥 2. INTEGER CHECK (10, 11, 12 allowed, 10.5 nahi)
-      if (!Number.isInteger(transferAmount)) {
-        return res.status(400).json({ message: "Transfer amount must be a whole number (e.g., 10, 11, 12). Decimals are not allowed." });
-      }
-
-      if (!transactionPassword) {
-        return res.status(400).json({ message: "Transaction password is required." });
-      }
-
-      // 🔹 1. Leader (Sender) Check
-      const sender = await User.findOne({ userId: fromUserId });
-      if (!sender) return res.status(404).json({ message: "Sender not found." });
-
-      if (sender.role !== 'leader') {
-          return res.status(403).json({ message: "Access denied. Only leaders can use this route." });
-      }
-
-      const isValidPassword = (transactionPassword.toLowerCase() === sender.transactionPassword.toLowerCase());
-      if (!isValidPassword) return res.status(403).json({ message: "Invalid transaction password." });
-
-      if (String(fromUserId) === String(toUserId)) {
-        return res.status(400).json({ message: "You cannot transfer funds to yourself." });
-      }
-
-      const receiver = await User.findOne({ userId: toUserId });
-      if (!receiver) return res.status(404).json({ message: "Target user not found." });
-
-      // =======================================================
-      // 🔹 2. 🔥 DOWNLINE ONLY CHECK (No Upline / No Crossline)
-      // =======================================================
-      let isDownline = false;
-      const isDirectReferral = Number(receiver.sponsorId) === Number(sender.userId);
-
-      if (isDirectReferral) {
-          isDownline = true;
-      } else {
-          // Upar ki taraf check karenge ki target user ke upline me sender aata hai ya nahi
-          let checkUplineId = receiver.sponsorId;
-          let depth = 1;
-          // Maximum 50 levels tak check karega
-          while (checkUplineId && depth <= 50) {
-              if (Number(checkUplineId) === Number(sender.userId)) {
-                  isDownline = true;
-                  break;
-              }
-              const nextNode = await User.findOne({ userId: checkUplineId }).select('sponsorId');
-              if (!nextNode) break;
-              checkUplineId = nextNode.sponsorId;
-              depth++;
-          }
-      }
-
-      if (!isDownline) {
-          return res.status(403).json({ 
-              message: "Action Denied! You can only transfer funds to your own Downline. Upline or Crossline transfer is restricted." 
-          });
-      }
-
-      // =======================================================
-      // 🔹 3. 🔥 NORMAL BALANCE CHECK (Removed $30 Lock)
-      // =======================================================
-      if (transferAmount > sender.walletBalance) {
-        return res.status(400).json({ 
-          message: "Insufficient Wallet Balance!" 
-        });
-      }
-
-      // 🔹 4. Deduct and Add
-      sender.walletBalance -= transferAmount;
-      receiver.walletBalance += transferAmount;
-
-      await sender.save();
-      await receiver.save();
-
-      // 🔹 5. Create Transactions
-      const Transaction = require('../models/Transaction');
-
-      await Transaction.create({
-        userId: sender.userId,
-        type: "transfer",
-        amount: transferAmount,
-        fromUserId: sender.userId,
-        toUserId: receiver.userId,
-        description: `Fund Transferred to ${receiver.name} (${receiver.userId})`,
-        status: "success",
-        date: new Date()
-      });
-
-      await Transaction.create({
-        userId: receiver.userId,
-        type: "transfer",
-        amount: transferAmount,
-        fromUserId: sender.userId,
-        toUserId: receiver.userId,
-        description: `Fund Received from ${sender.name} (${sender.userId})`,
-        status: "success",
-        date: new Date()
-      });
-
-      res.status(200).json({
-        success: true,
-        message: `$${transferAmount} successfully transferred to ${receiver.userId}.`
-      });
-
-    } catch (error) {
-      console.error("Leader Transfer Error:", error);
-      res.status(500).json({ message: "Server error during leader transfer." });
-    }
-  }
-);
-
 
 
 
