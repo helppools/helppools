@@ -104,6 +104,16 @@ const Sidebar = () => {
             <NavLink to={`${BASE_PATH}/manage-users`} className={linkClass} onClick={(e) => handleNavClick(e, `${BASE_PATH}/manage-users`)}>
               <FaUserCog className="inline-block mr-2 text-blue-500" /> Manage Roles & Leaders
             </NavLink>
+
+            <NavLink
+  to={`${BASE_PATH}/leader-package`}
+  className={linkClass}
+  onClick={(e) => handleNavClick(e, `${BASE_PATH}/leader-package`)}
+>
+  <FaGift className="inline-block mr-2 text-emerald-600" />
+  Leader Package Activation
+</NavLink>
+
             <NavLink to={`${BASE_PATH}/change-sponsor`} className={linkClass} onClick={(e) => handleNavClick(e, `${BASE_PATH}/change-sponsor`)}>
   <FaExchangeAlt className="inline-block mr-2 text-indigo-500" /> Change Sponsor
 </NavLink>

@@ -81,6 +81,7 @@ import AdminSecurity from './pages/admin/AdminSecurity.jsx';
 import DeviceManager from './pages/admin/DeviceManager.jsx';
 import BoosterOfferPage from './pages/admin/BoosterOfferPage.jsx';
 import AdminManageUsers from './pages/admin/AdminManageUsers.jsx';
+import AdminLeaderPackage from './pages/admin/AdminLeaderPackage.jsx';
 import MonthlyRewardReport from './pages/admin/MonthlyRewardReport.jsx';
 import WalletDirectStats from './pages/admin/WalletDirectStats'; 
   import UserDirectsReport from './pages/admin/UserDirectsReport';
@@ -225,6 +226,10 @@ function AppContent() {
               <Route path="promo-video" element={<AdminPromoVideo />} />
               <Route path="device-manager" element={<DeviceManager />} />
               <Route path="manage-users" element={<AdminManageUsers />} />
+              <Route
+  path="leader-package"
+  element={<AdminLeaderPackage />}
+/>
               <Route path="support" element={<AdminSupport />} />
             </Route>
             <Route path="*" element={<Navigate to="/community-access" />} />

@@ -12,7 +12,7 @@ const verifyAdmin = require('../middleware/adminAuth');
  const LoginHistory = require('../models/LoginHistory');
 const IpRule = require('../models/IpRule');
 const BlockedDevice = require('../models/BlockedDevice'); // Apna model import karein
-
+const PackageSubscription = require('../models/PackageSubscription');
 const { ethers } = require('ethers');
 require('dotenv').config();
 
@@ -76,6 +76,7 @@ const tokenABI = [
 // Dashboard summary
 
 
+ 
 
 
 // router.get('/dashboard', verifyAdmin, async (req, res) => {
@@ -136,23 +137,47 @@ const tokenABI = [
 //             // ✅ NORMAL TOTALS (Excluding Leader Settlements via address checks or remarks)
 //             totalAll: [
 //               { $match: { walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-//               { $group: { _id: null, sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } } }
+//               { $group: { 
+//                   _id: null, 
+//                   sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } 
+//                 } 
+//               }
 //             ],
 //             approvedTotal: [
 //               { $match: { status: "approved", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-//               { $group: { _id: null, sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } } }
+//               { $group: { 
+//                   _id: null, 
+//                   sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
+//                   netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
+//                 } 
+//               }
 //             ],
 //             approvedToday: [
 //               { $match: { createdAt: { $gte: startOfTodayIST }, status: "approved", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-//               { $group: { _id: null, sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } } }
+//               { $group: { 
+//                   _id: null, 
+//                   sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
+//                   netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
+//                 } 
+//               }
 //             ],
 //             pendingTotal: [
 //               { $match: { status: "pending", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-//               { $group: { _id: null, sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } } }
+//               { $group: { 
+//                   _id: null, 
+//                   sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
+//                   netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
+//                 } 
+//               }
 //             ],
 //             pendingToday: [
 //               { $match: { createdAt: { $gte: startOfTodayIST }, status: "pending", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-//               { $group: { _id: null, sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } } }
+//               { $group: { 
+//                   _id: null, 
+//                   sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
+//                   netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
+//                 } 
+//               }
 //             ],
 
 //             // ✅ LEADER AUTO-WITHDRAW BOX CALCULATION (Isme sirf wahi count honge)
@@ -241,12 +266,18 @@ const tokenABI = [
 //       todayDeposit: dep.today?.[0]?.sum || 0,
 //       pendingDepositToday: dep.pendingDepositToday?.[0]?.sum || dep.pendingToday?.[0]?.sum || 0,
       
+//       // GROSS WITHDRAWALS
 //       totalWithdrawal: withD.totalAll?.[0]?.sum || 0,
 //       approvedWithdrawalTotal: withD.approvedTotal?.[0]?.sum || 0,
 //       approvedWithdrawalToday: withD.approvedToday?.[0]?.sum || 0,
 //       pendingWithdrawalTotal: withD.pendingTotal?.[0]?.sum || 0,
 //       pendingWithdrawalToday: withD.pendingToday?.[0]?.sum || 0,
 
+//       // 🔥 NET WITHDRAWALS (SENT TO FRONTEND)
+//       netApprovedTotal: withD.approvedTotal?.[0]?.netTotal || 0,
+//       netApprovedToday: withD.approvedToday?.[0]?.netTotal || 0,
+//       netPendingTotal: withD.pendingTotal?.[0]?.netTotal || 0,
+//       netPendingToday: withD.pendingToday?.[0]?.netTotal || 0, // 🔥 YE NAYI LINE ADD KARNI HAI
 //       // ✅ LEADER AUTO-WITHDRAWAL SENT TO FRONTEND
 //       leaderAutoWithdrawTotal: withD.leaderAutoWithdrawTotal?.[0]?.sum || 0,
 //       leaderAutoWithdrawToday: withD.leaderAutoWithdrawToday?.[0]?.sum || 0,
@@ -334,164 +365,576 @@ const tokenABI = [
 // });
 
 
+ 
 router.get('/dashboard', verifyAdmin, async (req, res) => {
   try {
-    // 🔥 INDIA TIMEZONE FIX FOR "TODAY"
+    // INDIA TIMEZONE FIX
     const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', { 
-        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' 
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
     });
-    
+
     const parts = formatter.formatToParts(now);
     let month, day, year;
-    for (let p of parts) {
+
+    for (const p of parts) {
       if (p.type === 'month') month = p.value;
       if (p.type === 'day') day = p.value;
       if (p.type === 'year') year = p.value;
     }
-    
-    // Exactly raat 12:00 AM IST
-    const startOfTodayIST = new Date(`${year}-${month}-${day}T00:00:00+05:30`);
+
+    const startOfTodayIST = new Date(
+      `${year}-${month}-${day}T00:00:00+05:30`
+    );
+
     const startOfTodayTime = startOfTodayIST.getTime();
 
-    // SAARE ASYNC KAAM EK SATH KARENGE SPEED KE LIYE
+    // COMMON AMOUNT CONVERSION
+    const amountValue = (field) => ({
+      $convert: {
+        input: field,
+        to: 'double',
+        onError: 0,
+        onNull: 0
+      }
+    });
+
+    // NORMAL WITHDRAWAL FILTER
+    // Leader records with existing remarks/description are excluded.
+    const normalWithdrawalMatch = {
+      walletAddress: { $ne: '-' },
+      $nor: [
+        {
+          source: 'income_withdrawal',
+          description: {
+            $regex: 'leader income withdrawal',
+            $options: 'i'
+          }
+        },
+        {
+          remarks: {
+            $regex: 'leader auto settlement',
+            $options: 'i'
+          }
+        }
+      ]
+    };
+
+    const normalApprovedMatch = {
+      ...normalWithdrawalMatch,
+      status: 'approved'
+    };
+
+    const normalPendingMatch = {
+      ...normalWithdrawalMatch,
+      status: 'pending'
+    };
+
+    const normalApprovedTodayMatch = {
+      ...normalApprovedMatch,
+      createdAt: { $gte: startOfTodayIST }
+    };
+
+    const normalPendingTodayMatch = {
+      ...normalPendingMatch,
+      createdAt: { $gte: startOfTodayIST }
+    };
+
+    // LEADER TRANSACTION MATCHING
+    // Old Withdrawal records may not have remarks.
+    // Match them with their existing Leader Transaction.
+    const normalWithdrawalPipeline = [
+      {
+        $lookup: {
+          from: 'transactions',
+          let: {
+            withdrawalUserId: '$userId',
+            withdrawalGross: amountValue({
+              $ifNull: ['$grossAmount', '$amount']
+            }),
+            withdrawalFee: amountValue('$fee'),
+            withdrawalNet: amountValue({
+              $ifNull: ['$netAmount', '$amount']
+            }),
+            withdrawalDate: '$createdAt'
+          },
+          pipeline: [
+            {
+              $match: {
+                type: 'withdrawal',
+                source: 'income_withdrawal',
+                status: 'approved',
+                reversed: { $ne: true },
+                description: {
+                  $regex: 'leader income withdrawal',
+                  $options: 'i'
+                },
+                $expr: {
+                  $and: [
+                    {
+                      $eq: [
+                        '$userId',
+                        '$$withdrawalUserId'
+                      ]
+                    },
+                    {
+                      $eq: [
+                        amountValue({
+                          $ifNull: ['$grossAmount', '$amount']
+                        }),
+                        '$$withdrawalGross'
+                      ]
+                    },
+                    {
+                      $eq: [
+                        amountValue('$fee'),
+                        '$$withdrawalFee'
+                      ]
+                    },
+                    {
+                      $eq: [
+                        amountValue('$netAmount'),
+                        '$$withdrawalNet'
+                      ]
+                    },
+                    {
+                      $gte: [
+                        { $ifNull: ['$date', '$createdAt'] },
+                        {
+                          $subtract: [
+                            '$$withdrawalDate',
+                            120000
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      $lte: [
+                        { $ifNull: ['$date', '$createdAt'] },
+                        {
+                          $add: [
+                            '$$withdrawalDate',
+                            120000
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            { $limit: 1 }
+          ],
+          as: 'matchedLeaderTransactions'
+        }
+      },
+      {
+        $match: {
+          matchedLeaderTransactions: { $eq: [] }
+        }
+      },
+      {
+        $unset: 'matchedLeaderTransactions'
+      }
+    ];
+
+    // ALL ASYNC TASKS
     const [
       totalUsers,
       todayUsers,
       paidUsers,
       depositStats,
       withdrawalStats,
-      // 🔥 TRANSACTION KI JHANJHAT KHATAM! SIRF USERS KO DIRECT FETCH KARENGE
+      leaderSettlementStats,
       allUsers
     ] = await Promise.all([
+
+      // TOTAL USERS
       User.countDocuments(),
-      User.countDocuments({ createdAt: { $gte: startOfTodayIST } }),
-      User.countDocuments({ topUpAmount: { $gt: 0 } }),
-      
+
+      // TODAY USERS
+      User.countDocuments({
+        createdAt: { $gte: startOfTodayIST }
+      }),
+
+      // PAID USERS
+      User.countDocuments({
+        topUpAmount: { $gt: 0 }
+      }),
+
       // DEPOSIT STATS
       Deposit.aggregate([
         {
           $facet: {
-            total: [{ $group: { _id: null, sum: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } } } }],
-            today: [
-              { $match: { createdAt: { $gte: startOfTodayIST } } },
-              { $group: { _id: null, sum: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } } } }
+            total: [
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue('$amount')
+                  }
+                }
+              }
             ],
+
+            today: [
+              {
+                $match: {
+                  createdAt: { $gte: startOfTodayIST }
+                }
+              },
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue('$amount')
+                  }
+                }
+              }
+            ],
+
             pendingToday: [
-              { $match: { createdAt: { $gte: startOfTodayIST }, status: "pending" } },
-              { $group: { _id: null, sum: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } } } }
+              {
+                $match: {
+                  createdAt: { $gte: startOfTodayIST },
+                  status: 'pending'
+                }
+              },
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue('$amount')
+                  }
+                }
+              }
             ]
           }
         }
       ]),
 
-      // WITHDRAWAL STATS (🔥 LEADER AUTO WITHDRAW EXCLUDED FROM NORMAL STATS)
+      // NORMAL WITHDRAWAL STATS
+      // First exclude Leader records, then calculate Normal totals.
       Withdrawal.aggregate([
+        ...normalWithdrawalPipeline,
         {
           $facet: {
-            // ✅ NORMAL TOTALS (Excluding Leader Settlements via address checks or remarks)
+
+            // TOTAL NORMAL GROSS
             totalAll: [
-              { $match: { walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-              { $group: { 
-                  _id: null, 
-                  sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } 
-                } 
-              }
-            ],
-            approvedTotal: [
-              { $match: { status: "approved", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-              { $group: { 
-                  _id: null, 
-                  sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
-                  netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
-                } 
-              }
-            ],
-            approvedToday: [
-              { $match: { createdAt: { $gte: startOfTodayIST }, status: "approved", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-              { $group: { 
-                  _id: null, 
-                  sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
-                  netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
-                } 
-              }
-            ],
-            pendingTotal: [
-              { $match: { status: "pending", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-              { $group: { 
-                  _id: null, 
-                  sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
-                  netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
-                } 
-              }
-            ],
-            pendingToday: [
-              { $match: { createdAt: { $gte: startOfTodayIST }, status: "pending", walletAddress: { $ne: "-" }, remarks: { $ne: "Leader Auto Settlement" } } },
-              { $group: { 
-                  _id: null, 
-                  sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } },
-                  netTotal: { $sum: { $convert: { input: { $ifNull: ["$netAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } // 🔥 NET ADDED
-                } 
+              {
+                $match: normalWithdrawalMatch
+              },
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue({
+                      $ifNull: ['$grossAmount', '$amount']
+                    })
+                  }
+                }
               }
             ],
 
-            // ✅ LEADER AUTO-WITHDRAW BOX CALCULATION (Isme sirf wahi count honge)
-            leaderAutoWithdrawTotal: [
-              { $match: { $or: [{ remarks: "Leader Auto Settlement" }, { walletAddress: "-" }] } },
-              { $group: { _id: null, sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } } }
+            // APPROVED NORMAL TOTAL
+            approvedTotal: [
+              {
+                $match: normalApprovedMatch
+              },
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue({
+                      $ifNull: ['$grossAmount', '$amount']
+                    })
+                  },
+                  netTotal: {
+                    $sum: amountValue({
+                      $ifNull: ['$netAmount', '$amount']
+                    })
+                  }
+                }
+              }
             ],
-            leaderAutoWithdrawToday: [
-              { $match: { createdAt: { $gte: startOfTodayIST }, $or: [{ remarks: "Leader Auto Settlement" }, { walletAddress: "-" }] } },
-              { $group: { _id: null, sum: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } } }
+
+            // APPROVED NORMAL TODAY
+            approvedToday: [
+              {
+                $match: normalApprovedTodayMatch
+              },
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue({
+                      $ifNull: ['$grossAmount', '$amount']
+                    })
+                  },
+                  netTotal: {
+                    $sum: amountValue({
+                      $ifNull: ['$netAmount', '$amount']
+                    })
+                  }
+                }
+              }
+            ],
+
+            // PENDING NORMAL TOTAL
+            pendingTotal: [
+              {
+                $match: normalPendingMatch
+              },
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue({
+                      $ifNull: ['$grossAmount', '$amount']
+                    })
+                  },
+                  netTotal: {
+                    $sum: amountValue({
+                      $ifNull: ['$netAmount', '$amount']
+                    })
+                  }
+                }
+              }
+            ],
+
+            // PENDING NORMAL TODAY
+            pendingToday: [
+              {
+                $match: normalPendingTodayMatch
+              },
+              {
+                $group: {
+                  _id: null,
+                  sum: {
+                    $sum: amountValue({
+                      $ifNull: ['$grossAmount', '$amount']
+                    })
+                  },
+                  netTotal: {
+                    $sum: amountValue({
+                      $ifNull: ['$netAmount', '$amount']
+                    })
+                  }
+                }
+              }
             ]
           }
         }
       ]),
 
-      // 🔥 SIRF USERS FETCH KARO
-      User.find({}, { userId: 1, role: 1, sponsorId: 1, isToppedUp: 1, topUpAmount: 1, createdAt: 1, topUpDate: 1 }).lean()
+      // LEADER AUTO-SETTLEMENT
+      // READ FROM TRANSACTION COLLECTION
+      // OLD + NEW APPROVED LEADER RECORDS
+      Transaction.aggregate([
+        {
+          $match: {
+            type: 'withdrawal',
+            source: 'income_withdrawal',
+            status: 'approved',
+            reversed: { $ne: true },
+            description: {
+              $regex: 'leader income withdrawal',
+              $options: 'i'
+            }
+          }
+        },
+        {
+          $addFields: {
+            settlementGross: amountValue({
+              $ifNull: ['$grossAmount', '$amount']
+            }),
+
+            settlementFee: amountValue('$fee'),
+
+            storedNet: amountValue('$netAmount'),
+
+            settlementDate: {
+              $ifNull: ['$date', '$createdAt']
+            }
+          }
+        },
+        {
+          $addFields: {
+            settlementNet: {
+              $cond: [
+                { $gt: ['$storedNet', 0] },
+                '$storedNet',
+                {
+                  $max: [
+                    {
+                      $subtract: [
+                        '$settlementGross',
+                        '$settlementFee'
+                      ]
+                    },
+                    0
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+
+            grossTotal: {
+              $sum: '$settlementGross'
+            },
+
+            netTotal: {
+              $sum: '$settlementNet'
+            },
+
+            feeTotal: {
+              $sum: '$settlementFee'
+            },
+
+            totalCount: {
+              $sum: 1
+            },
+
+            todayNet: {
+              $sum: {
+                $cond: [
+                  {
+                    $gte: [
+                      '$settlementDate',
+                      startOfTodayIST
+                    ]
+                  },
+                  '$settlementNet',
+                  0
+                ]
+              }
+            },
+
+            todayGross: {
+              $sum: {
+                $cond: [
+                  {
+                    $gte: [
+                      '$settlementDate',
+                      startOfTodayIST
+                    ]
+                  },
+                  '$settlementGross',
+                  0
+                ]
+              }
+            },
+
+            todayFee: {
+              $sum: {
+                $cond: [
+                  {
+                    $gte: [
+                      '$settlementDate',
+                      startOfTodayIST
+                    ]
+                  },
+                  '$settlementFee',
+                  0
+                ]
+              }
+            },
+
+            todayCount: {
+              $sum: {
+                $cond: [
+                  {
+                    $gte: [
+                      '$settlementDate',
+                      startOfTodayIST
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ]),
+
+      // FETCH USERS
+      User.find(
+        {},
+        {
+          userId: 1,
+          role: 1,
+          sponsorId: 1,
+          isToppedUp: 1,
+          topUpAmount: 1,
+          createdAt: 1,
+          topUpDate: 1
+        }
+      ).lean()
     ]);
 
-    // ==============================================================
-    // 🚀 DIRECT COUNTING ENGINE 
-    // ==============================================================
+    // DIRECT COUNTING ENGINE
     const userMap = {};
-    allUsers.forEach(u => {
-      userMap[Number(u.userId)] = u;
+
+    allUsers.forEach(user => {
+      userMap[Number(user.userId)] = user;
     });
 
     let leaderTopupTotal = 0;
     let leaderTopupToday = 0;
+
     let normalTopupTotal = 0;
     let normalTopupToday = 0;
 
     let leaderBusinessTotal = 0;
     let leaderBusinessToday = 0;
+
     let normalBusinessTotal = 0;
     let normalBusinessToday = 0;
 
-    const specialNormalUsers = [1054948]; 
+    const specialNormalUsers = [1054948];
 
     allUsers.forEach(user => {
       if (!user.isToppedUp) return;
 
-      const dateToCheck = user.topUpDate || user.createdAt || new Date(0);
-      const isToday = new Date(dateToCheck).getTime() >= startOfTodayTime;
-      
-      let amount = Number(user.topUpAmount) || 30;
+      const dateToCheck =
+        user.topUpDate || user.createdAt || new Date(0);
+
+      const isToday =
+        new Date(dateToCheck).getTime() >= startOfTodayTime;
+
+      const amount = Number(user.topUpAmount) || 30;
+
       let isLeaderTopup = false;
-      const sponsorId = user.sponsorId ? Number(user.sponsorId) : null; 
+
+      const sponsorId = user.sponsorId
+        ? Number(user.sponsorId)
+        : null;
+
       const sponsorUser = userMap[sponsorId];
 
       if (sponsorId && sponsorUser) {
-          if (sponsorUser.role === 'leader' || specialNormalUsers.includes(sponsorId)) {
-              isLeaderTopup = true;
-          }
+        if (
+          sponsorUser.role === 'leader' ||
+          specialNormalUsers.includes(sponsorId)
+        ) {
+          isLeaderTopup = true;
+        }
       }
 
       if (isLeaderTopup) {
         leaderTopupTotal++;
         leaderBusinessTotal += amount;
+
         if (isToday) {
           leaderTopupToday++;
           leaderBusinessToday += amount;
@@ -499,6 +942,7 @@ router.get('/dashboard', verifyAdmin, async (req, res) => {
       } else {
         normalTopupTotal++;
         normalBusinessTotal += amount;
+
         if (isToday) {
           normalTopupToday++;
           normalBusinessToday += amount;
@@ -506,103 +950,181 @@ router.get('/dashboard', verifyAdmin, async (req, res) => {
       }
     });
 
-    const totalTopupBusiness = leaderBusinessTotal + normalBusinessTotal;
-    const todayTopupBusiness = leaderBusinessToday + normalBusinessToday;
+    const totalTopupBusiness =
+      leaderBusinessTotal + normalBusinessTotal;
+
+    const todayTopupBusiness =
+      leaderBusinessToday + normalBusinessToday;
 
     const dep = depositStats[0] || {};
     const withD = withdrawalStats[0] || {};
+    const leader = leaderSettlementStats[0] || {};
 
+    // FINAL DASHBOARD RESPONSE
     res.json({
+      // USER STATS
       totalUsers,
       todayUsers,
       paidUsers,
-      
+
+      // DEPOSIT STATS
       totalDeposit: dep.total?.[0]?.sum || 0,
       todayDeposit: dep.today?.[0]?.sum || 0,
-      pendingDepositToday: dep.pendingDepositToday?.[0]?.sum || dep.pendingToday?.[0]?.sum || 0,
-      
-      // GROSS WITHDRAWALS
-      totalWithdrawal: withD.totalAll?.[0]?.sum || 0,
-      approvedWithdrawalTotal: withD.approvedTotal?.[0]?.sum || 0,
-      approvedWithdrawalToday: withD.approvedToday?.[0]?.sum || 0,
-      pendingWithdrawalTotal: withD.pendingTotal?.[0]?.sum || 0,
-      pendingWithdrawalToday: withD.pendingToday?.[0]?.sum || 0,
 
-      // 🔥 NET WITHDRAWALS (SENT TO FRONTEND)
-      netApprovedTotal: withD.approvedTotal?.[0]?.netTotal || 0,
-      netApprovedToday: withD.approvedToday?.[0]?.netTotal || 0,
-      netPendingTotal: withD.pendingTotal?.[0]?.netTotal || 0,
-      netPendingToday: withD.pendingToday?.[0]?.netTotal || 0, // 🔥 YE NAYI LINE ADD KARNI HAI
-      // ✅ LEADER AUTO-WITHDRAWAL SENT TO FRONTEND
-      leaderAutoWithdrawTotal: withD.leaderAutoWithdrawTotal?.[0]?.sum || 0,
-      leaderAutoWithdrawToday: withD.leaderAutoWithdrawToday?.[0]?.sum || 0,
+      pendingDepositToday:
+        dep.pendingToday?.[0]?.sum || 0,
 
+      // NORMAL WITHDRAWAL GROSS
+      totalWithdrawal:
+        withD.totalAll?.[0]?.sum || 0,
+
+      approvedWithdrawalTotal:
+        withD.approvedTotal?.[0]?.sum || 0,
+
+      approvedWithdrawalToday:
+        withD.approvedToday?.[0]?.sum || 0,
+
+      pendingWithdrawalTotal:
+        withD.pendingTotal?.[0]?.sum || 0,
+
+      pendingWithdrawalToday:
+        withD.pendingToday?.[0]?.sum || 0,
+
+      // NORMAL WITHDRAWAL NET
+      netApprovedTotal:
+        withD.approvedTotal?.[0]?.netTotal || 0,
+
+      netApprovedToday:
+        withD.approvedToday?.[0]?.netTotal || 0,
+
+      netPendingTotal:
+        withD.pendingTotal?.[0]?.netTotal || 0,
+
+      netPendingToday:
+        withD.pendingToday?.[0]?.netTotal || 0,
+
+      // LEADER AUTO-SETTLEMENT
+      leaderAutoWithdrawGrossTotal:
+        leader.grossTotal || 0,
+
+      leaderAutoWithdrawTotal:
+        leader.netTotal || 0,
+
+      leaderAutoWithdrawToday:
+        leader.todayNet || 0,
+
+      leaderAutoWithdrawFeeTotal:
+        leader.feeTotal || 0,
+
+      leaderAutoWithdrawCount:
+        leader.totalCount || 0,
+
+      leaderAutoWithdrawTodayCount:
+        leader.todayCount || 0,
+
+      // EXTRA TODAY LEADER DETAILS
+      leaderAutoWithdrawGrossToday:
+        leader.todayGross || 0,
+
+      leaderAutoWithdrawFeeToday:
+        leader.todayFee || 0,
+
+      // TOPUP BUSINESS
       totalTopupBusiness,
       todayTopupBusiness,
 
       leaderTopupTotal,
       leaderTopupToday,
+
       normalTopupTotal,
       normalTopupToday,
 
       leaderBusinessTotal,
       leaderBusinessToday,
+
       normalBusinessTotal,
       normalBusinessToday
     });
 
   } catch (error) {
     console.error('Dashboard error:', error);
-    res.status(500).json({ message: 'Dashboard data fetch failed' });
+
+    res.status(500).json({
+      message: 'Dashboard data fetch failed'
+    });
   }
 });
 
 // GET /api/admin/stats
-router.get("/stats", verifyAdmin, async (req, res) => {
+// ORIGINAL STATS ROUTE - UNCHANGED
+router.get('/stats', verifyAdmin, async (req, res) => {
   try {
-    // 1. 🔥 INDIA (IST) TIMEZONE FIX FOR "TODAY"
+    // INDIA (IST) TIMEZONE FIX
     const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', { 
-        timeZone: 'Asia/Kolkata', 
-        year: 'numeric', 
-        month: '2-digit', 
-        day: '2-digit' 
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
     });
-    
+
     const parts = formatter.formatToParts(now);
+
     let month, day, year;
-    for (let p of parts) {
+
+    for (const p of parts) {
       if (p.type === 'month') month = p.value;
       if (p.type === 'day') day = p.value;
       if (p.type === 'year') year = p.value;
     }
-    
-    // Exactly raat 12:00 AM IST
-    const startOfTodayIST = new Date(`${year}-${month}-${day}T00:00:00+05:30`);
 
-    // 2. 🔥 DATA FETCH WITH STRING-TO-NUMBER SAFETY
+    const startOfTodayIST = new Date(
+      `${year}-${month}-${day}T00:00:00+05:30`
+    );
+
+    // DATA FETCH
     const totalUsers = await User.countDocuments();
-    
+
     const todayUsers = await User.countDocuments({
       createdAt: { $gte: startOfTodayIST }
     });
 
     const totalDeposit = await Deposit.aggregate([
-      { 
-        $group: { 
-          _id: null, 
-          total: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } } 
-        } 
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: {
+              $convert: {
+                input: '$amount',
+                to: 'double',
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
       }
     ]);
 
     const totalWithdrawal = await Withdrawal.aggregate([
-      { 
-        $group: { 
-          _id: null, 
-          // grossAmount aur amount dono ko safely check karega
-          total: { $sum: { $convert: { input: { $ifNull: ["$grossAmount", "$amount"] }, to: "double", onError: 0, onNull: 0 } } } 
-        } 
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: {
+              $convert: {
+                input: {
+                  $ifNull: ['$grossAmount', '$amount']
+                },
+                to: 'double',
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
       }
     ]);
 
@@ -615,11 +1137,12 @@ router.get("/stats", verifyAdmin, async (req, res) => {
 
   } catch (error) {
     console.error('Stats error:', error);
-    res.status(500).json({ message: 'Stats data fetch failed' });
+
+    res.status(500).json({
+      message: 'Stats data fetch failed'
+    });
   }
 });
-
-
 
 
 
@@ -666,6 +1189,554 @@ router.get('/all-users', verifyAdmin, async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching users" });
   }
 });
+
+
+
+
+// =======================================================
+// ADMIN: LEADER $60 FREE PACKAGE ACTIVATION
+// Only: Leader + Existing $30 package -> Free $60 upgrade
+// No wallet deduction and no commissions.
+// =======================================================
+
+router.get('/leader-package-users', verifyAdmin, async (req, res) => {
+  try {
+    const search = String(req.query.search || '').trim();
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+
+    const query = { role: 'leader' };
+
+    if (search) {
+      const conditions = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+
+      if (/^\d+$/.test(search)) {
+        conditions.push({ userId: Number(search) });
+      }
+
+      query.$or = conditions;
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select('userId name email role walletBalance topUpAmount isToppedUp packages')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+
+      User.countDocuments(query)
+    ]);
+
+    const userIds = users.map(user => Number(user.userId));
+
+    const subscriptions = await PackageSubscription.find({
+      userId: { $in: userIds },
+      packageAmount: { $in: [30, 60] }
+    })
+      .select('userId packageAmount status purchasedAt')
+      .lean();
+
+    const subscriptionMap = new Map();
+
+    for (const sub of subscriptions) {
+      const id = Number(sub.userId);
+
+      if (!subscriptionMap.has(id)) {
+        subscriptionMap.set(id, []);
+      }
+
+      subscriptionMap.get(id).push(sub);
+    }
+
+    const result = users.map(user => {
+      const subs = subscriptionMap.get(Number(user.userId)) || [];
+
+      const legacyAmounts = (user.packages || [])
+        .map(item => Number(item.amount || 0));
+
+      const allAmounts = [
+        ...subs.map(item => Number(item.packageAmount)),
+        ...legacyAmounts,
+        Number(user.topUpAmount || 0)
+      ].filter(amount => [30, 60].includes(amount));
+
+      const highestPackage = allAmounts.length
+        ? Math.max(...allAmounts)
+        : 0;
+
+      const alreadyHas60 = subs.some(
+        sub => Number(sub.packageAmount) === 60
+      ) || legacyAmounts.includes(60) ||
+        Number(user.topUpAmount || 0) >= 60;
+
+      return {
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        walletBalance: Number(user.walletBalance || 0),
+        currentPackage: highestPackage,
+        canActivate60:
+          highestPackage === 30 &&
+          !alreadyHas60 &&
+          user.isToppedUp === true
+      };
+    });
+
+    return res.json({
+      success: true,
+      users: result,
+      total,
+      totalPages: Math.ceil(total / limit)
+    });
+
+  } catch (error) {
+    console.error('Leader package users error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load Leader users.'
+    });
+  }
+});
+
+
+// -------------------------------------------------------
+// ADMIN FREE $60 ACTIVATION
+// -------------------------------------------------------
+
+const LeaderPackageActivationHistory = require("../models/LeaderPackageActivationHistory");
+
+
+/* ==========================================
+   ADMIN: FREE $60 LEADER PACKAGE ACTIVATION
+   No wallet deduction
+   No Direct / Level / Leader Bonus
+========================================== */
+
+router.post(
+  '/leader-package-activation/:userId',
+  verifyAdmin,
+  async (req, res) => {
+    let createdSubscription = null;
+    let createdHistory = null;
+    let userPackageUpdated = false;
+    let targetUserId = null;
+    let activationDate = null;
+
+    try {
+      targetUserId = Number(req.params.userId);
+
+      if (!Number.isSafeInteger(targetUserId) || targetUserId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid user ID.'
+        });
+      }
+
+      const user = await User.findOne({
+        userId: targetUserId,
+        role: 'leader'
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'Leader user not found.'
+        });
+      }
+
+      if (user.isBlocked) {
+        return res.status(403).json({
+          success: false,
+          message: 'Blocked user cannot be activated.'
+        });
+      }
+
+      // ------------------------------------------
+      // CHECK EXISTING PACKAGE SUBSCRIPTIONS
+      // ------------------------------------------
+
+      const subscriptions = await PackageSubscription.find({
+        userId: targetUserId
+      })
+        .select('packageAmount cycleNumber status')
+        .lean();
+
+      const legacyAmounts = (user.packages || []).map(
+        item => Number(item.amount || 0)
+      );
+
+      const subscriptionAmounts = subscriptions.map(
+        item => Number(item.packageAmount || 0)
+      );
+
+      const allPreviousAmounts = [
+        ...subscriptionAmounts,
+        ...legacyAmounts,
+        Number(user.topUpAmount || 0)
+      ].filter(amount =>
+        [30, 60, 120, 240, 480, 960].includes(amount)
+      );
+
+      const highestPackage = allPreviousAmounts.length
+        ? Math.max(...allPreviousAmounts)
+        : 0;
+
+      // ------------------------------------------
+      // $30 PACKAGE MUST BE ACTIVE
+      // ------------------------------------------
+
+      const hasActive30Subscription = subscriptions.some(
+        item =>
+          Number(item.packageAmount) === 30 &&
+          item.status === 'ACTIVE'
+      );
+
+      // Support older users whose package exists
+      // in legacy User.packages instead of subscription.
+      const hasLegacy30Package =
+        legacyAmounts.includes(30) &&
+        Number(user.topUpAmount || 0) === 30 &&
+        user.isToppedUp === true;
+
+      const hasActive30Package =
+        hasActive30Subscription || hasLegacy30Package;
+
+      if (
+        !hasActive30Package ||
+        highestPackage !== 30 ||
+        user.isToppedUp !== true ||
+        Number(user.topUpAmount || 0) !== 30
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Leader must have an active $30 package before the free $60 upgrade.'
+        });
+      }
+
+      // ------------------------------------------
+      // PREVENT DUPLICATE $60 ACTIVATION
+      // ------------------------------------------
+
+      const existing60 = await PackageSubscription.findOne({
+        userId: targetUserId,
+        packageAmount: 60
+      }).lean();
+
+      const existingHistory =
+        await LeaderPackageActivationHistory.findOne({
+          userId: targetUserId,
+          packageAmount: 60,
+          status: 'SUCCESS'
+        }).lean();
+
+      if (
+        existing60 ||
+        existingHistory ||
+        legacyAmounts.includes(60)
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'The $60 package has already been activated for this Leader.'
+        });
+      }
+
+      const now = new Date();
+      activationDate = now;
+
+      // ------------------------------------------
+      // CREATE FREE $60 SUBSCRIPTION
+      // ------------------------------------------
+
+      createdSubscription = await PackageSubscription.create({
+        userId: targetUserId,
+        packageAmount: 60,
+        purchaseType: 'UPGRADE',
+        cycleNumber: 1,
+        status: 'ACTIVE',
+        purchasedAt: now,
+        activatedAt: now,
+        accountingCapAmount: 120,
+        recordedActivityAmount: 0,
+        verifiedDirectCount: 0,
+        requiredDirectCount: 2,
+        currentStage: 1,
+        notes:
+          'Free $60 package activated manually by Admin. No wallet deduction and no commissions.'
+      });
+
+      // ------------------------------------------
+      // UPDATE USER PACKAGE
+      // Wallet is NOT changed.
+      // ------------------------------------------
+
+      const updateResult = await User.updateOne(
+        {
+          userId: targetUserId,
+          role: 'leader',
+          isBlocked: { $ne: true },
+          isToppedUp: true,
+          topUpAmount: 30
+        },
+        {
+          $push: {
+            packages: {
+              plan: 'Global Auto-Pool',
+              amount: 60,
+              startDate: now,
+              withdrawn: 0
+            }
+          },
+          $set: {
+            topUpAmount: 60,
+            isToppedUp: true
+          }
+        }
+      );
+
+      if (updateResult.modifiedCount !== 1) {
+        throw new Error(
+          'Leader package changed during activation. Please refresh and try again.'
+        );
+      }
+
+      userPackageUpdated = true;
+
+      // ------------------------------------------
+      // GET ADMIN DETAILS FROM AUTH MIDDLEWARE
+      // No Admin model dependency.
+      // ------------------------------------------
+
+      const admin =
+        req.admin ||
+        req.adminUser ||
+        req.user ||
+        {};
+
+      const adminId = String(
+        admin.adminId ||
+        admin.userId ||
+        admin.id ||
+        admin._id ||
+        req.adminId ||
+        ''
+      );
+
+      const adminName =
+        admin.name ||
+        admin.username ||
+        admin.email ||
+        'Admin';
+
+      // ------------------------------------------
+      // SAVE PERMANENT ACTIVATION HISTORY
+      // ------------------------------------------
+
+      createdHistory = await LeaderPackageActivationHistory.create({
+        userId: targetUserId,
+        leaderName: user.name || '',
+        leaderEmail: user.email || '',
+        packageAmount: 60,
+        activationType: 'FREE_ADMIN_UPGRADE',
+        status: 'SUCCESS',
+        adminId,
+        adminName,
+        createdAt: now
+      });
+
+      // ------------------------------------------
+      // SUCCESS RESPONSE
+      // ------------------------------------------
+
+      return res.status(200).json({
+        success: true,
+        message: 'Free $60 package activated successfully.',
+        package: {
+          subscriptionId: createdSubscription._id,
+          userId: targetUserId,
+          packageAmount: 60,
+          purchaseType: 'UPGRADE',
+          status: 'ACTIVE'
+        },
+        walletDeducted: 0,
+        commissionPaid: 0,
+        historySaved: true
+      });
+
+    } catch (error) {
+      console.error(
+        'Admin free Leader package activation error:',
+        error
+      );
+
+      // ------------------------------------------
+      // ROLLBACK HISTORY IF CREATED
+      // ------------------------------------------
+
+      if (createdHistory) {
+        await LeaderPackageActivationHistory.deleteOne({
+          _id: createdHistory._id
+        }).catch(rollbackError => {
+          console.error(
+            'History rollback failed:',
+            rollbackError
+          );
+        });
+      }
+
+      // ------------------------------------------
+      // ROLLBACK USER PACKAGE IF UPDATED
+      // ------------------------------------------
+
+      if (userPackageUpdated && targetUserId && activationDate) {
+        await User.updateOne(
+          {
+            userId: targetUserId,
+            role: 'leader',
+            topUpAmount: 60
+          },
+          {
+            $pull: {
+              packages: {
+                amount: 60,
+                startDate: activationDate
+              }
+            },
+            $set: {
+              topUpAmount: 30,
+              isToppedUp: true
+            }
+          }
+        ).catch(rollbackError => {
+          console.error(
+            'User package rollback failed:',
+            rollbackError
+          );
+        });
+      }
+
+      // ------------------------------------------
+      // ROLLBACK SUBSCRIPTION IF CREATED
+      // ------------------------------------------
+
+      if (createdSubscription) {
+        await PackageSubscription.deleteOne({
+          _id: createdSubscription._id
+        }).catch(rollbackError => {
+          console.error(
+            'Subscription rollback failed:',
+            rollbackError
+          );
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message || 'Free package activation failed.'
+      });
+    }
+  }
+);
+
+
+/* ==========================================
+   ADMIN: LEADER PACKAGE ACTIVATION HISTORY
+========================================== */
+
+router.get(
+  '/leader-package-activation-history',
+  verifyAdmin,
+  async (req, res) => {
+    try {
+      const page = Math.max(
+        1,
+        Number.parseInt(req.query.page, 10) || 1
+      );
+
+      const limit = Math.min(
+        100,
+        Math.max(1, Number.parseInt(req.query.limit, 10) || 20)
+      );
+
+      const search = String(req.query.search || '').trim();
+
+      const query = {
+        packageAmount: 60,
+        activationType: 'FREE_ADMIN_UPGRADE'
+      };
+
+      if (search) {
+        const conditions = [
+          {
+            leaderName: {
+              $regex: search,
+              $options: 'i'
+            }
+          },
+          {
+            leaderEmail: {
+              $regex: search,
+              $options: 'i'
+            }
+          },
+          {
+            adminName: {
+              $regex: search,
+              $options: 'i'
+            }
+          }
+        ];
+
+        if (/^\d+$/.test(search)) {
+          conditions.push({
+            userId: Number(search)
+          });
+        }
+
+        query.$or = conditions;
+      }
+
+      const [history, total] = await Promise.all([
+        LeaderPackageActivationHistory.find(query)
+          .sort({ createdAt: -1, _id: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .lean(),
+
+        LeaderPackageActivationHistory.countDocuments(query)
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        history,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit))
+      });
+
+    } catch (error) {
+      console.error(
+        'Leader Package History Error:',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to load activation history.'
+      });
+    }
+  }
+);
+
 
 
 // =======================================================
@@ -4909,8 +5980,7 @@ router.get('/wallet-update-history', verifyAdmin, async (req, res) => {
 });
 
 
-// ✅ Corrected Route for Admin User Search (Added here)
-// Isse admin kisi bhi ek user ko search karega toh usko plain text password dikhega
+ // Isse admin kisi bhi ek user ko search karega toh usko plain text password dikhega
 // router.get('/user/:userId', verifyAdmin, async (req, res) => {
 //   try {
 //     const user = await User.findOne({ userId: Number(req.params.userId) }).lean();
