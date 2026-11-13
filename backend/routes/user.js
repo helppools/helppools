@@ -440,111 +440,242 @@ router.put('/update-profile-secure', authMiddleware, async (req, res) => {
 // ---------------------------
 // 1. UPDATED (SUPER FAST): Direct Team Route
 // ---------------------------
+// router.get('/direct-team/:userId', async (req, res) => {
+//   try {
+//     const currentUserId = Number(req.params.userId);
+
+//     // 🔥 1. Ek hi baar me saare users RAM mein load karenge (Superfast Breakaway ke liye)
+//     const allUsers = await User.find({}, 'userId sponsorId name mobile country topUpAmount createdAt role').lean();
+
+//     // 👑 🔥 NAYA FIX: CURRENT USER KA ROLE CHECK KARO (Super Leader Bypass ke liye)
+//     const currentUserData = allUsers.find(u => u.userId === currentUserId);
+//     const isSuperLeader = currentUserData && currentUserData.role === 'superleader';
+
+//     // 2. RAM mein Network Tree (Map) banayenge
+//     const directMap = new Map();
+//     const userDetailsMap = new Map();
+
+//     for (let u of allUsers) {
+//         userDetailsMap.set(u.userId, u);
+//         if (u.sponsorId) {
+//             if (!directMap.has(u.sponsorId)) {
+//                 directMap.set(u.sponsorId, []);
+//             }
+//             directMap.get(u.sponsorId).push(u);
+//         }
+//     }
+
+//     // 🔥 3. MAIN USER KI TOTAL TEAM NIKALNA (With Breakaway Rule) 🔥
+//     let mainUserTotalTeam = 0;
+//     let mainQueue = [...(directMap.get(currentUserId) || [])];
+
+//     while (mainQueue.length > 0) {
+//         const currentNode = mainQueue.shift();
+//         mainUserTotalTeam++; // Ek user count ho gaya
+
+//         // 🛑 ABSOLUTE BREAKAWAY WALL (WITH SUPER LEADER BYPASS) 🛑
+//         // Agar banda 'leader' hai aur check karne wala 'superleader' NAHI hai, tabhi roko.
+//         if (currentNode.role === 'leader' && !isSuperLeader) {
+//             continue; 
+//         }
+
+//         // Agar leader nahi hai ya Super Leader bypass hai, toh iski team aage queue mein add karo
+//         const children = directMap.get(currentNode.userId) || [];
+//         for (let child of children) {
+//             mainQueue.push(child);
+//         }
+//     }
+
+//     // 🔥 4. TABLE KE LIYE DIRECTS KA DATA BANANA 🔥
+//     const myDirects = directMap.get(currentUserId) || [];
+    
+//     const teamWithStats = myDirects.map((direct, index) => {
+//         const membersDirects = directMap.get(direct.userId) || [];
+//         const directCount = membersDirects.length;
+
+//         let teamSize = 0;
+
+//         // 🛑 Agar Direct member Leader hai aur user normal hai, toh uski team 0 bhejenge
+//         if (direct.role === 'leader' && !isSuperLeader) {
+//             teamSize = 0; 
+//         } else {
+//             // Agar bypass allowed hai, toh uski team size calculate karenge
+//             let subQueue = [...membersDirects];
+//             while (subQueue.length > 0) {
+//                 const subNode = subQueue.shift();
+//                 teamSize++;
+
+//                 // 🛑 Is sub-team ke andar bhi Breakaway check karenge (WITH BYPASS)
+//                 if (subNode.role === 'leader' && !isSuperLeader) {
+//                     continue; 
+//                 }
+//                 const subChildren = directMap.get(subNode.userId) || [];
+//                 for (let child of subChildren) {
+//                     subQueue.push(child);
+//                 }
+//             }
+//         }
+
+//         return {
+//             srNo: index + 1,
+//             userId: direct.userId,
+//             name: direct.name,
+//             mobile: direct.mobile,
+//             country: direct.country,
+//             role: direct.role, 
+//             topUpAmount: direct.topUpAmount,
+//             createdAt: direct.createdAt,
+//             totalDirects: directCount,
+//             totalTeam: teamSize,
+//             // 🔥 NAYA FIX: Frontend ko same naam se data bhejo jo database mein hai
+//             globalTeamCount: teamSize, 
+//             directCount: directCount
+//         };
+//     });
+
+//     // Naye directs sabse upar dikhane ke liye sort (Descending order of date)
+//     teamWithStats.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+//     // Response Bhejenge
+//     res.json({
+//       team: teamWithStats,      
+//       totalTeam: mainUserTotalTeam 
+//     });
+
+//   } catch (err) {
+//     console.error("Error in direct-team API:", err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
+
 router.get('/direct-team/:userId', async (req, res) => {
   try {
     const currentUserId = Number(req.params.userId);
 
-    // 🔥 1. Ek hi baar me saare users RAM mein load karenge (Superfast Breakaway ke liye)
-    const allUsers = await User.find({}, 'userId sponsorId name mobile country topUpAmount createdAt role').lean();
+    if (!Number.isSafeInteger(currentUserId) || currentUserId <= 0) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
 
-    // 👑 🔥 NAYA FIX: CURRENT USER KA ROLE CHECK KARO (Super Leader Bypass ke liye)
-    const currentUserData = allUsers.find(u => u.userId === currentUserId);
-    const isSuperLeader = currentUserData && currentUserData.role === 'superleader';
+    // Load users once
+    const allUsers = await User.find(
+      {},
+      'userId sponsorId name mobile country topUpAmount createdAt role'
+    ).lean();
 
-    // 2. RAM mein Network Tree (Map) banayenge
+    const currentUserData = allUsers.find(
+      u => Number(u.userId) === currentUserId
+    );
+
+    if (!currentUserData) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isSuperLeader = currentUserData.role === 'superleader';
+
+    // Build network maps
     const directMap = new Map();
-    const userDetailsMap = new Map();
 
-    for (let u of allUsers) {
-        userDetailsMap.set(u.userId, u);
-        if (u.sponsorId) {
-            if (!directMap.has(u.sponsorId)) {
-                directMap.set(u.sponsorId, []);
-            }
-            directMap.get(u.sponsorId).push(u);
+    for (const u of allUsers) {
+      const sponsorId = Number(u.sponsorId);
+
+      if (u.sponsorId != null && Number.isSafeInteger(sponsorId)) {
+        if (!directMap.has(sponsorId)) {
+          directMap.set(sponsorId, []);
         }
+
+        directMap.get(sponsorId).push(u);
+      }
     }
 
-    // 🔥 3. MAIN USER KI TOTAL TEAM NIKALNA (With Breakaway Rule) 🔥
+    // Main user's total team (existing breakaway rule preserved)
     let mainUserTotalTeam = 0;
-    let mainQueue = [...(directMap.get(currentUserId) || [])];
+    const mainQueue = [...(directMap.get(currentUserId) || [])];
+    let mainIndex = 0;
 
-    while (mainQueue.length > 0) {
-        const currentNode = mainQueue.shift();
-        mainUserTotalTeam++; // Ek user count ho gaya
+    while (mainIndex < mainQueue.length) {
+      const currentNode = mainQueue[mainIndex++];
+      mainUserTotalTeam++;
 
-        // 🛑 ABSOLUTE BREAKAWAY WALL (WITH SUPER LEADER BYPASS) 🛑
-        // Agar banda 'leader' hai aur check karne wala 'superleader' NAHI hai, tabhi roko.
-        if (currentNode.role === 'leader' && !isSuperLeader) {
-            continue; 
-        }
+      // Preserve existing leader breakaway for normal users.
+      if (currentNode.role === 'leader' && !isSuperLeader) {
+        continue;
+      }
 
-        // Agar leader nahi hai ya Super Leader bypass hai, toh iski team aage queue mein add karo
-        const children = directMap.get(currentNode.userId) || [];
-        for (let child of children) {
-            mainQueue.push(child);
-        }
+      const children = directMap.get(Number(currentNode.userId)) || [];
+
+      for (const child of children) {
+        mainQueue.push(child);
+      }
     }
 
-    // 🔥 4. TABLE KE LIYE DIRECTS KA DATA BANANA 🔥
+    // Direct members and their team statistics
     const myDirects = directMap.get(currentUserId) || [];
-    
+
     const teamWithStats = myDirects.map((direct, index) => {
-        const membersDirects = directMap.get(direct.userId) || [];
-        const directCount = membersDirects.length;
+      const membersDirects =
+        directMap.get(Number(direct.userId)) || [];
 
-        let teamSize = 0;
+      const directCount = membersDirects.length;
 
-        // 🛑 Agar Direct member Leader hai aur user normal hai, toh uski team 0 bhejenge
-        if (direct.role === 'leader' && !isSuperLeader) {
-            teamSize = 0; 
-        } else {
-            // Agar bypass allowed hai, toh uski team size calculate karenge
-            let subQueue = [...membersDirects];
-            while (subQueue.length > 0) {
-                const subNode = subQueue.shift();
-                teamSize++;
+      // IMPORTANT:
+      // Do not hide a direct Leader's own team statistics.
+      // Count the Leader's team using the existing nested
+      // breakaway rule for leaders below them.
+      let teamSize = 0;
+      const subQueue = [...membersDirects];
+      let subIndex = 0;
 
-                // 🛑 Is sub-team ke andar bhi Breakaway check karenge (WITH BYPASS)
-                if (subNode.role === 'leader' && !isSuperLeader) {
-                    continue; 
-                }
-                const subChildren = directMap.get(subNode.userId) || [];
-                for (let child of subChildren) {
-                    subQueue.push(child);
-                }
-            }
+      while (subIndex < subQueue.length) {
+        const subNode = subQueue[subIndex++];
+        teamSize++;
+
+        // Preserve nested leader breakaway for normal users.
+        if (subNode.role === 'leader' && !isSuperLeader) {
+          continue;
         }
 
-        return {
-            srNo: index + 1,
-            userId: direct.userId,
-            name: direct.name,
-            mobile: direct.mobile,
-            country: direct.country,
-            role: direct.role, 
-            topUpAmount: direct.topUpAmount,
-            createdAt: direct.createdAt,
-            totalDirects: directCount,
-            totalTeam: teamSize,
-            // 🔥 NAYA FIX: Frontend ko same naam se data bhejo jo database mein hai
-            globalTeamCount: teamSize, 
-            directCount: directCount
-        };
+        const subChildren =
+          directMap.get(Number(subNode.userId)) || [];
+
+        for (const child of subChildren) {
+          subQueue.push(child);
+        }
+      }
+
+      return {
+        srNo: index + 1,
+        userId: direct.userId,
+        name: direct.name,
+        mobile: direct.mobile,
+        country: direct.country,
+        role: direct.role,
+        topUpAmount: direct.topUpAmount,
+        createdAt: direct.createdAt,
+
+        // Leader's own counts are now visible.
+        totalDirects: directCount,
+        totalTeam: teamSize,
+        globalTeamCount: teamSize,
+        directCount: directCount
+      };
     });
 
-    // Naye directs sabse upar dikhane ke liye sort (Descending order of date)
-    teamWithStats.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Newest directs first
+    teamWithStats.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
 
-    // Response Bhejenge
-    res.json({
-      team: teamWithStats,      
-      totalTeam: mainUserTotalTeam 
+    return res.json({
+      team: teamWithStats,
+      totalTeam: mainUserTotalTeam
     });
 
   } catch (err) {
     console.error("Error in direct-team API:", err);
-    res.status(500).json({ message: 'Server error' });
+
+    return res.status(500).json({
+      message: "Server error"
+    });
   }
 });
 
