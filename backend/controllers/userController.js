@@ -747,6 +747,13 @@ exports.getUserById = async (req, res) => {
     // Stage 6: WAITING or RUNNING
     // =========================================================
 
+    
+    // =========================================================
+    // $30 RETOPUP ELIGIBILITY
+    // Stage 5: ACHIEVED
+    // Any stage from Stage 6 onward: RUNNING or ACHIEVED
+    // =========================================================
+
     let retopupEligible30 = false;
     let retopupSubscriptionId = null;
 
@@ -754,25 +761,26 @@ exports.getUserById = async (req, res) => {
       userId: targetUserId,
       packageAmount: 30,
       status: "ACTIVE",
-      currentStage: 6,
-      stages: {
-        $all: [
-          {
+      $and: [
+        {
+          stages: {
             $elemMatch: {
               stageNumber: 5,
               status: "ACHIEVED"
             }
-          },
-          {
+          }
+        },
+        {
+          stages: {
             $elemMatch: {
-              stageNumber: 6,
+              stageNumber: { $gte: 6 },
               status: {
-                $in: ["WAITING", "RUNNING"]
+                $in: ["RUNNING", "ACHIEVED"]
               }
             }
           }
-        ]
-      }
+        }
+      ]
     })
       .select("_id")
       .sort({ createdAt: -1 })

@@ -1611,35 +1611,65 @@ async function processStageFiveRetopup({
   // Current Stage = 6
   // =========================================================
 
-  if (packageAmount === 30) {
-    const stage5 = (subscription.stages || []).find(
-      stage => Number(stage.stageNumber) === 5
+  // if (packageAmount === 30) {
+  //   const stage5 = (subscription.stages || []).find(
+  //     stage => Number(stage.stageNumber) === 5
+  //   );
+
+  //   const stage6 = (subscription.stages || []).find(
+  //     stage => Number(stage.stageNumber) === 6
+  //   );
+
+  //   console.log("========== $30 RETOPUP DEBUG ==========");
+  //   console.log("Target User:", targetId);
+  //   console.log("Subscription ID:", String(subscription._id));
+  //   console.log("Original Package:", subscription.packageAmount);
+  //   console.log("Retopup Amount:", packageAmount);
+  //   console.log("Current Stage:", subscription.currentStage);
+  //   console.log("Stage 5 Status:", stage5?.status);
+  //   console.log("Stage 6 Status:", stage6?.status);
+  //   console.log("=======================================");
+
+  //   if (
+  //     Number(subscription.currentStage) !== 6 ||
+  //     String(stage5?.status) !== "ACHIEVED" ||
+  //     !["WAITING", "RUNNING"].includes(String(stage6?.status))
+  //   ) {
+  //     throw new Error(
+  //       "Your $30 retopup is allowed only after Stage 5 is achieved and Stage 6 is WAITING or RUNNING."
+  //     );
+  //   }
+  // }
+
+  // $30 retopup allowed after Stage 5 is achieved.
+// Any stage from Stage 6 onward can be RUNNING or ACHIEVED.
+if (packageAmount === 30) {
+  const stages = Array.isArray(subscription.stages)
+    ? subscription.stages
+    : [];
+
+  // Check Stage 5 completion
+  const stageFive = stages.find(
+    stage => Number(stage.stageNumber) === 5
+  );
+
+  const stageFiveCompleted =
+    String(stageFive?.status || "").toUpperCase() === "ACHIEVED";
+
+  // Check any stage from Stage 6 onward
+  const laterStageAllowed = stages.some(stage =>
+    Number(stage.stageNumber) >= 6 &&
+    ["RUNNING", "ACHIEVED"].includes(
+      String(stage.status || "").toUpperCase()
+    )
+  );
+
+  if (!stageFiveCompleted || !laterStageAllowed) {
+    throw new Error(
+      "$30 retopup is allowed after Stage 5 is achieved and any later stage is running or achieved."
     );
-
-    const stage6 = (subscription.stages || []).find(
-      stage => Number(stage.stageNumber) === 6
-    );
-
-    console.log("========== $30 RETOPUP DEBUG ==========");
-    console.log("Target User:", targetId);
-    console.log("Subscription ID:", String(subscription._id));
-    console.log("Original Package:", subscription.packageAmount);
-    console.log("Retopup Amount:", packageAmount);
-    console.log("Current Stage:", subscription.currentStage);
-    console.log("Stage 5 Status:", stage5?.status);
-    console.log("Stage 6 Status:", stage6?.status);
-    console.log("=======================================");
-
-    if (
-      Number(subscription.currentStage) !== 6 ||
-      String(stage5?.status) !== "ACHIEVED" ||
-      !["WAITING", "RUNNING"].includes(String(stage6?.status))
-    ) {
-      throw new Error(
-        "Your $30 retopup is allowed only after Stage 5 is achieved and Stage 6 is WAITING or RUNNING."
-      );
-    }
   }
+}
 
   // =========================================================
   // UNIQUE RETOPUP TRANSACTION ID
@@ -1704,31 +1734,30 @@ async function processStageFiveRetopup({
     // RECHECK ELIGIBILITY DURING CAP UPDATE
     // =======================================================
 
-    const eligibilityFilter = packageAmount === 30
-      ? {
-          currentStage: 6,
-          $and: [
-            {
-              stages: {
-                $elemMatch: {
-                  stageNumber: 5,
-                  status: "ACHIEVED"
-                }
-              }
-            },
-            {
-              stages: {
-                $elemMatch: {
-                  stageNumber: 6,
-                  status: {
-                    $in: ["WAITING", "RUNNING"]
-                  }
-                }
+   const eligibilityFilter = packageAmount === 30
+  ? {
+      $and: [
+        {
+          stages: {
+            $elemMatch: {
+              stageNumber: 5,
+              status: "ACHIEVED"
+            }
+          }
+        },
+        {
+          stages: {
+            $elemMatch: {
+              stageNumber: { $gte: 6 },
+              status: {
+                $in: ["RUNNING", "ACHIEVED"]
               }
             }
-          ]
+          }
         }
-      : {};
+      ]
+    }
+  : {};
 
     // =======================================================
     // UPDATE SAME SUBSCRIPTION ACCOUNTING CAP
