@@ -1199,110 +1199,7 @@ router.get('/all-users', verifyAdmin, async (req, res) => {
 // No wallet deduction and no commissions.
 // =======================================================
 
-router.get('/leader-package-users', verifyAdmin, async (req, res) => {
-  try {
-    const search = String(req.query.search || '').trim();
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
-
-    const query = { role: 'leader' };
-
-    if (search) {
-      const conditions = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
-
-      if (/^\d+$/.test(search)) {
-        conditions.push({ userId: Number(search) });
-      }
-
-      query.$or = conditions;
-    }
-
-    const [users, total] = await Promise.all([
-      User.find(query)
-        .select('userId name email role walletBalance topUpAmount isToppedUp packages')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-
-      User.countDocuments(query)
-    ]);
-
-    const userIds = users.map(user => Number(user.userId));
-
-    const subscriptions = await PackageSubscription.find({
-      userId: { $in: userIds },
-      packageAmount: { $in: [30, 60] }
-    })
-      .select('userId packageAmount status purchasedAt')
-      .lean();
-
-    const subscriptionMap = new Map();
-
-    for (const sub of subscriptions) {
-      const id = Number(sub.userId);
-
-      if (!subscriptionMap.has(id)) {
-        subscriptionMap.set(id, []);
-      }
-
-      subscriptionMap.get(id).push(sub);
-    }
-
-    const result = users.map(user => {
-      const subs = subscriptionMap.get(Number(user.userId)) || [];
-
-      const legacyAmounts = (user.packages || [])
-        .map(item => Number(item.amount || 0));
-
-      const allAmounts = [
-        ...subs.map(item => Number(item.packageAmount)),
-        ...legacyAmounts,
-        Number(user.topUpAmount || 0)
-      ].filter(amount => [30, 60].includes(amount));
-
-      const highestPackage = allAmounts.length
-        ? Math.max(...allAmounts)
-        : 0;
-
-      const alreadyHas60 = subs.some(
-        sub => Number(sub.packageAmount) === 60
-      ) || legacyAmounts.includes(60) ||
-        Number(user.topUpAmount || 0) >= 60;
-
-      return {
-        userId: user.userId,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        walletBalance: Number(user.walletBalance || 0),
-        currentPackage: highestPackage,
-        canActivate60:
-          highestPackage === 30 &&
-          !alreadyHas60 &&
-          user.isToppedUp === true
-      };
-    });
-
-    return res.json({
-      success: true,
-      users: result,
-      total,
-      totalPages: Math.ceil(total / limit)
-    });
-
-  } catch (error) {
-    console.error('Leader package users error:', error);
-
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to load Leader users.'
-    });
-  }
-});
+ 
 
 
 // -------------------------------------------------------
@@ -1318,6 +1215,650 @@ const LeaderPackageActivationHistory = require("../models/LeaderPackageActivatio
    No Direct / Level / Leader Bonus
 ========================================== */
 
+// router.post(
+//   '/leader-package-activation/:userId',
+//   verifyAdmin,
+//   async (req, res) => {
+//     let createdSubscription = null;
+//     let createdHistory = null;
+//     let userPackageUpdated = false;
+//     let targetUserId = null;
+//     let activationDate = null;
+
+//     try {
+//       targetUserId = Number(req.params.userId);
+
+//       if (!Number.isSafeInteger(targetUserId) || targetUserId <= 0) {
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Invalid user ID.'
+//         });
+//       }
+
+//       const user = await User.findOne({
+//         userId: targetUserId,
+//         role: 'leader'
+//       });
+
+//       if (!user) {
+//         return res.status(404).json({
+//           success: false,
+//           message: 'Leader user not found.'
+//         });
+//       }
+
+//       if (user.isBlocked) {
+//         return res.status(403).json({
+//           success: false,
+//           message: 'Blocked user cannot be activated.'
+//         });
+//       }
+
+//       // ------------------------------------------
+//       // CHECK EXISTING PACKAGE SUBSCRIPTIONS
+//       // ------------------------------------------
+
+//       const subscriptions = await PackageSubscription.find({
+//         userId: targetUserId
+//       })
+//         .select('packageAmount cycleNumber status')
+//         .lean();
+
+//       const legacyAmounts = (user.packages || []).map(
+//         item => Number(item.amount || 0)
+//       );
+
+//       const subscriptionAmounts = subscriptions.map(
+//         item => Number(item.packageAmount || 0)
+//       );
+
+//       const allPreviousAmounts = [
+//         ...subscriptionAmounts,
+//         ...legacyAmounts,
+//         Number(user.topUpAmount || 0)
+//       ].filter(amount =>
+//         [30, 60, 120, 240, 480, 960].includes(amount)
+//       );
+
+//       const highestPackage = allPreviousAmounts.length
+//         ? Math.max(...allPreviousAmounts)
+//         : 0;
+
+//       // ------------------------------------------
+//       // $30 PACKAGE MUST BE ACTIVE
+//       // ------------------------------------------
+
+//       const hasActive30Subscription = subscriptions.some(
+//         item =>
+//           Number(item.packageAmount) === 30 &&
+//           item.status === 'ACTIVE'
+//       );
+
+//       // Support older users whose package exists
+//       // in legacy User.packages instead of subscription.
+//       const hasLegacy30Package =
+//         legacyAmounts.includes(30) &&
+//         Number(user.topUpAmount || 0) === 30 &&
+//         user.isToppedUp === true;
+
+//       const hasActive30Package =
+//         hasActive30Subscription || hasLegacy30Package;
+
+//       if (
+//         !hasActive30Package ||
+//         highestPackage !== 30 ||
+//         user.isToppedUp !== true ||
+//         Number(user.topUpAmount || 0) !== 30
+//       ) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             'Leader must have an active $30 package before the free $60 upgrade.'
+//         });
+//       }
+
+//       // ------------------------------------------
+//       // PREVENT DUPLICATE $60 ACTIVATION
+//       // ------------------------------------------
+
+//       const existing60 = await PackageSubscription.findOne({
+//         userId: targetUserId,
+//         packageAmount: 60
+//       }).lean();
+
+//       const existingHistory =
+//         await LeaderPackageActivationHistory.findOne({
+//           userId: targetUserId,
+//           packageAmount: 60,
+//           status: 'SUCCESS'
+//         }).lean();
+
+//       if (
+//         existing60 ||
+//         existingHistory ||
+//         legacyAmounts.includes(60)
+//       ) {
+//         return res.status(409).json({
+//           success: false,
+//           message:
+//             'The $60 package has already been activated for this Leader.'
+//         });
+//       }
+
+//       const now = new Date();
+//       activationDate = now;
+
+//       // ------------------------------------------
+//       // CREATE FREE $60 SUBSCRIPTION
+//       // ------------------------------------------
+
+//       createdSubscription = await PackageSubscription.create({
+//         userId: targetUserId,
+//         packageAmount: 60,
+//         purchaseType: 'UPGRADE',
+//         cycleNumber: 1,
+//         status: 'ACTIVE',
+//         purchasedAt: now,
+//         activatedAt: now,
+//         accountingCapAmount: 120,
+//         recordedActivityAmount: 0,
+//         verifiedDirectCount: 0,
+//         requiredDirectCount: 2,
+//         currentStage: 1,
+//         notes:
+//           'Free $60 package activated manually by Admin. No wallet deduction and no commissions.'
+//       });
+
+//       // ------------------------------------------
+//       // UPDATE USER PACKAGE
+//       // Wallet is NOT changed.
+//       // ------------------------------------------
+
+//       const updateResult = await User.updateOne(
+//         {
+//           userId: targetUserId,
+//           role: 'leader',
+//           isBlocked: { $ne: true },
+//           isToppedUp: true,
+//           topUpAmount: 30
+//         },
+//         {
+//           $push: {
+//             packages: {
+//               plan: 'Global Auto-Pool',
+//               amount: 60,
+//               startDate: now,
+//               withdrawn: 0
+//             }
+//           },
+//           $set: {
+//             topUpAmount: 60,
+//             isToppedUp: true
+//           }
+//         }
+//       );
+
+//       if (updateResult.modifiedCount !== 1) {
+//         throw new Error(
+//           'Leader package changed during activation. Please refresh and try again.'
+//         );
+//       }
+
+//       userPackageUpdated = true;
+
+//       // ------------------------------------------
+//       // GET ADMIN DETAILS FROM AUTH MIDDLEWARE
+//       // No Admin model dependency.
+//       // ------------------------------------------
+
+//       const admin =
+//         req.admin ||
+//         req.adminUser ||
+//         req.user ||
+//         {};
+
+//       const adminId = String(
+//         admin.adminId ||
+//         admin.userId ||
+//         admin.id ||
+//         admin._id ||
+//         req.adminId ||
+//         ''
+//       );
+
+//       const adminName =
+//         admin.name ||
+//         admin.username ||
+//         admin.email ||
+//         'Admin';
+
+//       // ------------------------------------------
+//       // SAVE PERMANENT ACTIVATION HISTORY
+//       // ------------------------------------------
+
+//       createdHistory = await LeaderPackageActivationHistory.create({
+//         userId: targetUserId,
+//         leaderName: user.name || '',
+//         leaderEmail: user.email || '',
+//         packageAmount: 60,
+//         activationType: 'FREE_ADMIN_UPGRADE',
+//         status: 'SUCCESS',
+//         adminId,
+//         adminName,
+//         createdAt: now
+//       });
+
+//       // ------------------------------------------
+//       // SUCCESS RESPONSE
+//       // ------------------------------------------
+
+//       return res.status(200).json({
+//         success: true,
+//         message: 'Free $60 package activated successfully.',
+//         package: {
+//           subscriptionId: createdSubscription._id,
+//           userId: targetUserId,
+//           packageAmount: 60,
+//           purchaseType: 'UPGRADE',
+//           status: 'ACTIVE'
+//         },
+//         walletDeducted: 0,
+//         commissionPaid: 0,
+//         historySaved: true
+//       });
+
+//     } catch (error) {
+//       console.error(
+//         'Admin free Leader package activation error:',
+//         error
+//       );
+
+//       // ------------------------------------------
+//       // ROLLBACK HISTORY IF CREATED
+//       // ------------------------------------------
+
+//       if (createdHistory) {
+//         await LeaderPackageActivationHistory.deleteOne({
+//           _id: createdHistory._id
+//         }).catch(rollbackError => {
+//           console.error(
+//             'History rollback failed:',
+//             rollbackError
+//           );
+//         });
+//       }
+
+//       // ------------------------------------------
+//       // ROLLBACK USER PACKAGE IF UPDATED
+//       // ------------------------------------------
+
+//       if (userPackageUpdated && targetUserId && activationDate) {
+//         await User.updateOne(
+//           {
+//             userId: targetUserId,
+//             role: 'leader',
+//             topUpAmount: 60
+//           },
+//           {
+//             $pull: {
+//               packages: {
+//                 amount: 60,
+//                 startDate: activationDate
+//               }
+//             },
+//             $set: {
+//               topUpAmount: 30,
+//               isToppedUp: true
+//             }
+//           }
+//         ).catch(rollbackError => {
+//           console.error(
+//             'User package rollback failed:',
+//             rollbackError
+//           );
+//         });
+//       }
+
+//       // ------------------------------------------
+//       // ROLLBACK SUBSCRIPTION IF CREATED
+//       // ------------------------------------------
+
+//       if (createdSubscription) {
+//         await PackageSubscription.deleteOne({
+//           _id: createdSubscription._id
+//         }).catch(rollbackError => {
+//           console.error(
+//             'Subscription rollback failed:',
+//             rollbackError
+//           );
+//         });
+//       }
+
+//       return res.status(500).json({
+//         success: false,
+//         message:
+//           error.message || 'Free package activation failed.'
+//       });
+//     }
+//   }
+// );
+
+
+// /* ==========================================
+//    ADMIN: LEADER PACKAGE ACTIVATION HISTORY
+// ========================================== */
+
+// router.get(
+//   '/leader-package-activation-history',
+//   verifyAdmin,
+//   async (req, res) => {
+//     try {
+//       const page = Math.max(
+//         1,
+//         Number.parseInt(req.query.page, 10) || 1
+//       );
+
+//       const limit = Math.min(
+//         100,
+//         Math.max(1, Number.parseInt(req.query.limit, 10) || 20)
+//       );
+
+//       const search = String(req.query.search || '').trim();
+
+//       const query = {
+//         packageAmount: 60,
+//         activationType: 'FREE_ADMIN_UPGRADE'
+//       };
+
+//       if (search) {
+//         const conditions = [
+//           {
+//             leaderName: {
+//               $regex: search,
+//               $options: 'i'
+//             }
+//           },
+//           {
+//             leaderEmail: {
+//               $regex: search,
+//               $options: 'i'
+//             }
+//           },
+//           {
+//             adminName: {
+//               $regex: search,
+//               $options: 'i'
+//             }
+//           }
+//         ];
+
+//         if (/^\d+$/.test(search)) {
+//           conditions.push({
+//             userId: Number(search)
+//           });
+//         }
+
+//         query.$or = conditions;
+//       }
+
+//       const [history, total] = await Promise.all([
+//         LeaderPackageActivationHistory.find(query)
+//           .sort({ createdAt: -1, _id: -1 })
+//           .skip((page - 1) * limit)
+//           .limit(limit)
+//           .lean(),
+
+//         LeaderPackageActivationHistory.countDocuments(query)
+//       ]);
+
+//       return res.status(200).json({
+//         success: true,
+//         history,
+//         total,
+//         page,
+//         limit,
+//         totalPages: Math.max(1, Math.ceil(total / limit))
+//       });
+
+//     } catch (error) {
+//       console.error(
+//         'Leader Package History Error:',
+//         error
+//       );
+
+//       return res.status(500).json({
+//         success: false,
+//         message: 'Failed to load activation history.'
+//       });
+//     }
+//   }
+// );
+
+
+/* =========================================================
+   ADMIN FREE LEADER PACKAGE UPGRADE ROUTES
+
+   $30 current package -> FREE $60
+   $60 current package -> FREE $120
+
+   Wallet Deduction: $0
+   Direct Income: $0
+   Level Income: $0
+   Leader Bonus: $0
+
+   Existing declarations required:
+   router
+   verifyAdmin
+   User
+   PackageSubscription
+   LeaderPackageActivationHistory
+========================================================= */
+
+
+ 
+
+
+/* =========================================================
+   ADMIN FREE LEADER PACKAGE UPGRADE ROUTES
+
+   $30 current package -> FREE $60
+   $60 current package -> FREE $120
+
+   Wallet Deduction: $0
+   Direct Income: $0
+   Level Income: $0
+   Leader Bonus: $0
+
+   Existing declarations required:
+   router
+   verifyAdmin
+   User
+   PackageSubscription
+   LeaderPackageActivationHistory
+========================================================= */
+
+
+/* =========================================================
+   GET ELIGIBLE LEADERS
+========================================================= */
+
+
+router.get(
+  '/leader-package-users',
+  verifyAdmin,
+  async (req, res) => {
+    try {
+      const page = Math.max(
+        1,
+        Number.parseInt(req.query.page, 10) || 1
+      );
+
+      const limit = Math.min(
+        100,
+        Math.max(1, Number.parseInt(req.query.limit, 10) || 20)
+      );
+
+      const search = String(req.query.search || '').trim();
+
+      // Only active Leaders with current $30 or $60 package
+      const userQuery = {
+        role: 'leader',
+        isBlocked: { $ne: true },
+        isToppedUp: true,
+        topUpAmount: { $in: [30, 60] }
+      };
+
+      if (search) {
+        const searchConditions = [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ];
+
+        if (/^\d+$/.test(search)) {
+          searchConditions.push({
+            userId: Number(search)
+          });
+        }
+
+        userQuery.$or = searchConditions;
+      }
+
+      const candidateUsers = await User.find(userQuery)
+        .select(
+          'userId name email walletBalance topUpAmount isToppedUp packages isBlocked role'
+        )
+        .lean();
+
+      if (!candidateUsers.length) {
+        return res.status(200).json({
+          success: true,
+          users: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 1
+        });
+      }
+
+      const userIds = candidateUsers.map(
+        user => user.userId
+      );
+
+      // Fetch existing subscriptions and successful free-upgrade history
+      const [subscriptions, successfulHistory] =
+        await Promise.all([
+          PackageSubscription.find({
+            userId: { $in: userIds }
+          })
+            .select('userId packageAmount status')
+            .lean(),
+
+          LeaderPackageActivationHistory.find({
+            userId: { $in: userIds },
+            packageAmount: { $in: [60, 120] },
+            activationType: 'FREE_ADMIN_UPGRADE',
+            status: 'SUCCESS'
+          })
+            .select('userId packageAmount')
+            .lean()
+        ]);
+
+      // Determine eligibility separately for each target package
+      const eligibleUsers = candidateUsers
+        .filter(user => {
+          const currentPackage = Number(
+            user.topUpAmount || 0
+          );
+
+          // Only $30 -> $60 and $60 -> $120
+          if (
+            user.isToppedUp !== true ||
+            ![30, 60].includes(currentPackage)
+          ) {
+            return false;
+          }
+
+          const targetPackageAmount = currentPackage * 2;
+
+          const userSubscriptions = subscriptions.filter(
+            item =>
+              Number(item.userId) === Number(user.userId)
+          );
+
+          const legacyAmounts = (user.packages || []).map(
+            item => Number(item.amount || 0)
+          );
+
+          /*
+           * IMPORTANT:
+           * For current $60, previous $60 history is allowed.
+           * Only an existing $120 target blocks the $120 upgrade.
+           */
+
+          const targetAlreadyExists =
+            userSubscriptions.some(
+              item =>
+                Number(item.packageAmount) === targetPackageAmount
+            ) ||
+            legacyAmounts.includes(targetPackageAmount) ||
+            successfulHistory.some(
+              item =>
+                Number(item.userId) === Number(user.userId) &&
+                Number(item.packageAmount) === targetPackageAmount
+            );
+
+          return !targetAlreadyExists;
+        })
+        .map(user => ({
+          userId: user.userId,
+          name: user.name || '',
+          email: user.email || '',
+          walletBalance: Number(user.walletBalance || 0),
+          currentPackage: Number(user.topUpAmount || 0),
+          canActivateFreeUpgrade: true
+        }));
+
+      // Pagination
+      const total = eligibleUsers.length;
+      const startIndex = (page - 1) * limit;
+
+      return res.status(200).json({
+        success: true,
+        users: eligibleUsers.slice(
+          startIndex,
+          startIndex + limit
+        ),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(
+          1,
+          Math.ceil(total / limit)
+        )
+      });
+
+    } catch (error) {
+      console.error(
+        'Leader Package Users Error:',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to load eligible Leaders.'
+      });
+    }
+  }
+);
+
+
+/* =========================================================
+   POST FREE PACKAGE ACTIVATION
+
+   $30 -> $60
+   $60 -> $120
+========================================================= */
+
 router.post(
   '/leader-package-activation/:userId',
   verifyAdmin,
@@ -1325,18 +1866,39 @@ router.post(
     let createdSubscription = null;
     let createdHistory = null;
     let userPackageUpdated = false;
+
     let targetUserId = null;
     let activationDate = null;
+
+    let targetPackageAmount = 0;
+    let requiredCurrentPackage = 0;
 
     try {
       targetUserId = Number(req.params.userId);
 
-      if (!Number.isSafeInteger(targetUserId) || targetUserId <= 0) {
+      targetPackageAmount = Number(
+        req.body?.packageAmount || 60
+      );
+
+      if (
+        !Number.isSafeInteger(targetUserId) ||
+        targetUserId <= 0
+      ) {
         return res.status(400).json({
           success: false,
           message: 'Invalid user ID.'
         });
       }
+
+      if (![60, 120].includes(targetPackageAmount)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Only FREE $60 and FREE $120 upgrades are allowed.'
+        });
+      }
+
+      requiredCurrentPackage = targetPackageAmount / 2;
 
       const user = await User.findOne({
         userId: targetUserId,
@@ -1357,9 +1919,24 @@ router.post(
         });
       }
 
-      // ------------------------------------------
-      // CHECK EXISTING PACKAGE SUBSCRIPTIONS
-      // ------------------------------------------
+      /*
+       * CHECK CURRENT PACKAGE
+       */
+
+      if (
+        user.isToppedUp !== true ||
+        Number(user.topUpAmount || 0) !== requiredCurrentPackage
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Leader must have an active $${requiredCurrentPackage} package before the free $${targetPackageAmount} upgrade.`
+        });
+      }
+
+      /*
+       * GET ALL EXISTING SUBSCRIPTIONS
+       */
 
       const subscriptions = await PackageSubscription.find({
         userId: targetUserId
@@ -1387,95 +1964,106 @@ router.post(
         ? Math.max(...allPreviousAmounts)
         : 0;
 
-      // ------------------------------------------
-      // $30 PACKAGE MUST BE ACTIVE
-      // ------------------------------------------
+      /*
+       * VERIFY ACTIVE CURRENT PACKAGE
+       */
 
-      const hasActive30Subscription = subscriptions.some(
-        item =>
-          Number(item.packageAmount) === 30 &&
-          item.status === 'ACTIVE'
-      );
+      const hasActiveCurrentSubscription =
+        subscriptions.some(
+          item =>
+            Number(item.packageAmount) === requiredCurrentPackage &&
+            item.status === 'ACTIVE'
+        );
 
-      // Support older users whose package exists
-      // in legacy User.packages instead of subscription.
-      const hasLegacy30Package =
-        legacyAmounts.includes(30) &&
-        Number(user.topUpAmount || 0) === 30 &&
+      const hasLegacyCurrentPackage =
+        legacyAmounts.includes(requiredCurrentPackage) &&
+        Number(user.topUpAmount || 0) === requiredCurrentPackage &&
         user.isToppedUp === true;
 
-      const hasActive30Package =
-        hasActive30Subscription || hasLegacy30Package;
+      const hasActiveCurrentPackage =
+        hasActiveCurrentSubscription ||
+        hasLegacyCurrentPackage;
 
       if (
-        !hasActive30Package ||
-        highestPackage !== 30 ||
-        user.isToppedUp !== true ||
-        Number(user.topUpAmount || 0) !== 30
+        !hasActiveCurrentPackage ||
+        highestPackage !== requiredCurrentPackage
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'Leader must have an active $30 package before the free $60 upgrade.'
+            `Leader must have an active $${requiredCurrentPackage} package and no higher package before the free $${targetPackageAmount} upgrade.`
         });
       }
 
-      // ------------------------------------------
-      // PREVENT DUPLICATE $60 ACTIVATION
-      // ------------------------------------------
+      /*
+       * PREVENT DUPLICATE TARGET PACKAGE
+       *
+       * Previous $60 history does not block $120.
+       * Only duplicate target package is blocked.
+       */
 
-      const existing60 = await PackageSubscription.findOne({
-        userId: targetUserId,
-        packageAmount: 60
-      }).lean();
+      const existingTargetSubscription =
+        await PackageSubscription.findOne({
+          userId: targetUserId,
+          packageAmount: targetPackageAmount
+        }).lean();
 
-      const existingHistory =
+      const existingTargetHistory =
         await LeaderPackageActivationHistory.findOne({
           userId: targetUserId,
-          packageAmount: 60,
+          packageAmount: targetPackageAmount,
+          activationType: 'FREE_ADMIN_UPGRADE',
           status: 'SUCCESS'
         }).lean();
 
       if (
-        existing60 ||
-        existingHistory ||
-        legacyAmounts.includes(60)
+        existingTargetSubscription ||
+        existingTargetHistory ||
+        legacyAmounts.includes(targetPackageAmount)
       ) {
         return res.status(409).json({
           success: false,
           message:
-            'The $60 package has already been activated for this Leader.'
+            `The $${targetPackageAmount} package has already been activated for this Leader.`
         });
       }
 
       const now = new Date();
       activationDate = now;
 
-      // ------------------------------------------
-      // CREATE FREE $60 SUBSCRIPTION
-      // ------------------------------------------
+      /*
+       * CREATE FREE PACKAGE SUBSCRIPTION
+       *
+       * Accounting cap = package amount x 2
+       */
 
       createdSubscription = await PackageSubscription.create({
         userId: targetUserId,
-        packageAmount: 60,
+        packageAmount: targetPackageAmount,
+
         purchaseType: 'UPGRADE',
         cycleNumber: 1,
         status: 'ACTIVE',
+
         purchasedAt: now,
         activatedAt: now,
-        accountingCapAmount: 120,
+
+        accountingCapAmount: targetPackageAmount * 2,
+
         recordedActivityAmount: 0,
         verifiedDirectCount: 0,
         requiredDirectCount: 2,
         currentStage: 1,
+
         notes:
-          'Free $60 package activated manually by Admin. No wallet deduction and no commissions.'
+          `Free $${targetPackageAmount} package activated manually by Admin. No wallet deduction and no commissions.`
       });
 
-      // ------------------------------------------
-      // UPDATE USER PACKAGE
-      // Wallet is NOT changed.
-      // ------------------------------------------
+      /*
+       * UPDATE USER PACKAGE
+       *
+       * Wallet balance is NOT changed.
+       */
 
       const updateResult = await User.updateOne(
         {
@@ -1483,19 +2071,20 @@ router.post(
           role: 'leader',
           isBlocked: { $ne: true },
           isToppedUp: true,
-          topUpAmount: 30
+          topUpAmount: requiredCurrentPackage
         },
         {
           $push: {
             packages: {
               plan: 'Global Auto-Pool',
-              amount: 60,
+              amount: targetPackageAmount,
               startDate: now,
               withdrawn: 0
             }
           },
+
           $set: {
-            topUpAmount: 60,
+            topUpAmount: targetPackageAmount,
             isToppedUp: true
           }
         }
@@ -1509,10 +2098,9 @@ router.post(
 
       userPackageUpdated = true;
 
-      // ------------------------------------------
-      // GET ADMIN DETAILS FROM AUTH MIDDLEWARE
-      // No Admin model dependency.
-      // ------------------------------------------
+      /*
+       * ADMIN DETAILS
+       */
 
       const admin =
         req.admin ||
@@ -1535,37 +2123,50 @@ router.post(
         admin.email ||
         'Admin';
 
-      // ------------------------------------------
-      // SAVE PERMANENT ACTIVATION HISTORY
-      // ------------------------------------------
+      /*
+       * SAVE ACTIVATION HISTORY
+       */
 
-      createdHistory = await LeaderPackageActivationHistory.create({
-        userId: targetUserId,
-        leaderName: user.name || '',
-        leaderEmail: user.email || '',
-        packageAmount: 60,
-        activationType: 'FREE_ADMIN_UPGRADE',
-        status: 'SUCCESS',
-        adminId,
-        adminName,
-        createdAt: now
-      });
+      createdHistory =
+        await LeaderPackageActivationHistory.create({
+          userId: targetUserId,
 
-      // ------------------------------------------
-      // SUCCESS RESPONSE
-      // ------------------------------------------
+          leaderName: user.name || '',
+          leaderEmail: user.email || '',
+
+          packageAmount: targetPackageAmount,
+
+          activationType: 'FREE_ADMIN_UPGRADE',
+          status: 'SUCCESS',
+
+          adminId,
+          adminName,
+
+          createdAt: now
+        });
+
+      /*
+       * SUCCESS RESPONSE
+       */
 
       return res.status(200).json({
         success: true,
-        message: 'Free $60 package activated successfully.',
+
+        message:
+          `Free $${targetPackageAmount} package activated successfully.`,
+
         package: {
           subscriptionId: createdSubscription._id,
           userId: targetUserId,
-          packageAmount: 60,
+          packageAmount: targetPackageAmount,
           purchaseType: 'UPGRADE',
           status: 'ACTIVE'
         },
+
         walletDeducted: 0,
+        directIncome: 0,
+        levelIncome: 0,
+        leaderBonus: 0,
         commissionPaid: 0,
         historySaved: true
       });
@@ -1576,9 +2177,9 @@ router.post(
         error
       );
 
-      // ------------------------------------------
-      // ROLLBACK HISTORY IF CREATED
-      // ------------------------------------------
+      /*
+       * ROLLBACK HISTORY
+       */
 
       if (createdHistory) {
         await LeaderPackageActivationHistory.deleteOne({
@@ -1591,26 +2192,31 @@ router.post(
         });
       }
 
-      // ------------------------------------------
-      // ROLLBACK USER PACKAGE IF UPDATED
-      // ------------------------------------------
+      /*
+       * ROLLBACK USER PACKAGE
+       */
 
-      if (userPackageUpdated && targetUserId && activationDate) {
+      if (
+        userPackageUpdated &&
+        targetUserId &&
+        activationDate
+      ) {
         await User.updateOne(
           {
             userId: targetUserId,
             role: 'leader',
-            topUpAmount: 60
+            topUpAmount: targetPackageAmount
           },
           {
             $pull: {
               packages: {
-                amount: 60,
+                amount: targetPackageAmount,
                 startDate: activationDate
               }
             },
+
             $set: {
-              topUpAmount: 30,
+              topUpAmount: requiredCurrentPackage,
               isToppedUp: true
             }
           }
@@ -1622,9 +2228,9 @@ router.post(
         });
       }
 
-      // ------------------------------------------
-      // ROLLBACK SUBSCRIPTION IF CREATED
-      // ------------------------------------------
+      /*
+       * ROLLBACK SUBSCRIPTION
+       */
 
       if (createdSubscription) {
         await PackageSubscription.deleteOne({
@@ -1647,9 +2253,11 @@ router.post(
 );
 
 
-/* ==========================================
-   ADMIN: LEADER PACKAGE ACTIVATION HISTORY
-========================================== */
+/* =========================================================
+   GET FREE PACKAGE ACTIVATION HISTORY
+
+   Shows both $60 and $120 history.
+========================================================= */
 
 router.get(
   '/leader-package-activation-history',
@@ -1669,7 +2277,7 @@ router.get(
       const search = String(req.query.search || '').trim();
 
       const query = {
-        packageAmount: 60,
+        packageAmount: { $in: [60, 120] },
         activationType: 'FREE_ADMIN_UPGRADE'
       };
 
@@ -1720,7 +2328,10 @@ router.get(
         total,
         page,
         limit,
-        totalPages: Math.max(1, Math.ceil(total / limit))
+        totalPages: Math.max(
+          1,
+          Math.ceil(total / limit)
+        )
       });
 
     } catch (error) {
@@ -1737,8 +2348,7 @@ router.get(
   }
 );
 
-
-
+ 
 // =======================================================
 // 2. UPDATE ROLE & HANDLE $30 LOGIC (TRANSACTION FIX ADDED)
 // =======================================================
