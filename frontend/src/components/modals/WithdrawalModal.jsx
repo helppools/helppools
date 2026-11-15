@@ -11674,12 +11674,32 @@ const proceedWithdrawal = async (directData = null) => {
         0
       );
 
-   setSuccessData({
-  userId: response.data?.generatedId || "",
-  userName: response.data?.displayName || " User",
+//    setSuccessData({
+//   userId: response.data?.generatedId || "",
+//   userName: response.data?.displayName || " User",
+//   amount: requestedWithdrawalAmount,
+//   source: "DEMO Withdrawal"
+// });
+
+
+
+setSuccessData({
+  userId:
+    (isPromo
+      ? response.data?.generatedId
+      : userId || loggedInUser?.userId || response.data?.userId
+    ) || "",
+
+  userName:
+    (isPromo
+      ? response.data?.displayName || response.data?.name
+      : loggedInUser?.name || response.data?.displayName || response.data?.name
+    ) || "User",
+
   amount: requestedWithdrawalAmount,
   source: "DEMO Withdrawal"
 });
+
     setConfirmData(null);
     setSuccessOpen(true);
 
