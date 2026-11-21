@@ -1736,6 +1736,19 @@ const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
 
 const PACKAGE_AMOUNTS = [30, 60, 120, 240, 480, 960];
 
+const PACKAGE_DIRECT_REQUIREMENTS = {
+  30: 2,
+  60: 4,
+  120: 6,
+  240: 8,
+  480: 10,
+  960: 12
+};
+
+function getPackageRequiredDirects(packageAmount) {
+  return PACKAGE_DIRECT_REQUIREMENTS[Number(packageAmount)] || 2;
+}
+
 const DEFAULT_STAGE_DAYS = [
   1, 3, 7, 15,
   30, 30, 30, 30, 30, 30,
@@ -1822,7 +1835,8 @@ async function syncDirectStageTimers(user, packageAmount) {
   const results = [];
 
   // Har package ke liye 2 qualified directs required
-  const requiredDirects = 2;
+const requiredDirects =
+  getPackageRequiredDirects(packageAmount);
 
   // Direct condition complete nahi hui to timer start nahi hoga
   if (matchingDirects < requiredDirects) {
@@ -2041,11 +2055,13 @@ async function validateDirectStageTimerItems(user, items) {
     const matchingDirects =
       Number(timerData.matchingDirects) || 0;
 
-    const requiredDirects = 2;
-    const remainingDirects = Math.max(
-      0,
-      requiredDirects - matchingDirects
-    );
+    const requiredDirects =
+  getPackageRequiredDirects(packageAmount);
+
+const remainingDirects = Math.max(
+  0,
+  requiredDirects - matchingDirects
+);
 
     // First check whether required Directs are completed
     if (matchingDirects < requiredDirects) {
@@ -2090,7 +2106,9 @@ async function validateDirectStageTimerItems(user, items) {
 
 async function checkPackageDirectEligibility(user, requiredPackage) {
   const userPackage = Number(requiredPackage);
-  const requiredDirects = 2;
+
+const requiredDirects =
+  getPackageRequiredDirects(userPackage);
 
   const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
 
@@ -2180,8 +2198,8 @@ qualifiedDirectActivationDates.sort(
 );
 
 const eligibilityAchievedAt =
-  qualifiedDirectActivationDates.length >= 2
-    ? qualifiedDirectActivationDates[1]
+  qualifiedDirectActivationDates.length >= requiredDirects
+    ? qualifiedDirectActivationDates[requiredDirects - 1]
     : null;
 
 
@@ -2190,8 +2208,10 @@ const eligibilityAchievedAt =
     return {
       allowed: false,
       message:
-        `Your $${userPackage} package requires 2 direct referrals with an active $30 package. Matching: ${matchingDirects}/2.`,
-      packageAmount: userPackage,
+  `Your $${userPackage} package requires ${requiredDirects} ` +
+  `direct referrals with an active $30 package. ` +
+  `Matching: ${matchingDirects}/${requiredDirects}.`,
+  packageAmount: userPackage,
       directPackage: 30,
       matchingDirects,
       requiredDirects
