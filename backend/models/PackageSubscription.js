@@ -1048,41 +1048,359 @@
 
 
 
-const mongoose = require("mongoose");
+// const mongoose = require("mongoose");
 
-const PACKAGE_AMOUNTS = [30, 60, 120, 240, 480, 960];
+// const PACKAGE_AMOUNTS = [30, 60, 120, 240, 480, 960];
 
-const DEFAULT_STAGE_DAYS = [
-  1, 3, 7, 15,
-  30, 30, 30, 30, 30, 30,
-  30, 30, 30, 30
-];
+// const DEFAULT_STAGE_DAYS = [
+//   1, 3, 7, 15,
+//   30, 30, 30, 30, 30, 30,
+//   30, 30, 30, 30
+// ];
 
-// const getStageDays = (packageAmount) => {
+// // const getStageDays = (packageAmount) => {
+// //   if (Number(packageAmount) === 30) {
+// //     return [
+// //       0.2, 0.2, 0.2, 0.2, 0.2,
+// //       30, 30, 30, 30, 30,
+// //       30, 30, 30, 30
+// //     ];
+// //   }
+
+// //   return [...DEFAULT_STAGE_DAYS];
+// // };
+
+
+// function getStageDays(packageAmount) {
 //   if (Number(packageAmount) === 30) {
 //     return [
 //       0.2, 0.2, 0.2, 0.2, 0.2,
-//       30, 30, 30, 30, 30,
+//       1, // Stage 6 = 24 hours
+//       30, 30, 30, 30,
 //       30, 30, 30, 30
 //     ];
 //   }
 
 //   return [...DEFAULT_STAGE_DAYS];
-// };
+// }
 
+// const stageSchema = new mongoose.Schema({
+//   stageNumber: {
+//     type: Number,
+//     required: true,
+//     min: 1,
+//     max: 14
+//   },
+
+//   durationDays: {
+//     type: Number,
+//     required: true,
+//     min: 0.01
+//   },
+
+//   status: {
+//     type: String,
+//     enum: ["LOCKED", "WAITING", "RUNNING", "PAUSED", "ACHIEVED"],
+//     default: "LOCKED"
+//   },
+
+//   earningAmount: {
+//     type: Number,
+//     default: 0,
+//     min: 0
+//   },
+
+//   earningStatus: {
+//     type: String,
+//     enum: ["NOT_RECORDED", "PENDING", "RECORDED"],
+//     default: "NOT_RECORDED"
+//   },
+
+//   earningRecordedAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   withdrawnAmount: {
+//     type: Number,
+//     default: 0,
+//     min: 0
+//   },
+
+//   startedAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   endsAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   pausedAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   completedAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   accumulatedPausedSeconds: {
+//     type: Number,
+//     default: 0,
+//     min: 0
+//   }
+// }, { _id: false });
+
+
+// const packageSubscriptionSchema = new mongoose.Schema({
+//   userId: {
+//     type: Number,
+//     required: true,
+//     index: true
+//   },
+
+//   packageAmount: {
+//     type: Number,
+//     required: true,
+//     enum: PACKAGE_AMOUNTS
+//   },
+
+//   purchaseType: {
+//     type: String,
+//     enum: ["FIRST_PURCHASE", "UPGRADE", "REPEAT"],
+//     required: true
+//   },
+
+//   cycleNumber: {
+//     type: Number,
+//     required: true,
+//     min: 1
+//   },
+
+//   status: {
+//     type: String,
+//     enum: ["PENDING", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"],
+//     default: "PENDING",
+//     index: true
+//   },
+
+//   purchasedAt: {
+//     type: Date,
+//     default: Date.now
+//   },
+
+//   activatedAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   completedAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   withdrawnAmount: {
+//     type: Number,
+//     default: 0,
+//     min: 0
+//   },
+
+//   // Backward compatibility only.
+//   // These fields are NOT used for Stage 5 retopup.
+ 
+
+//    accountingCapAmount: {
+//     type: Number,
+//     default: function () {
+//       return Number(this.packageAmount) * 2;
+//     },
+//     min: 0
+//   },
+
+//   recordedActivityAmount: {
+//     type: Number,
+//     default: 0,
+//     min: 0
+//   },
+
+//   verifiedDirectCount: {
+//     type: Number,
+//     default: 0,
+//     min: 0
+//   },
+
+//   requiredDirectCount: {
+//     type: Number,
+//     default: 2,
+//     min: 2
+//   },
+
+//   currentStage: {
+//     type: Number,
+//     default: 1,
+//     min: 1,
+//     max: 14
+//   },
+
+//   stages: {
+//     type: [stageSchema],
+//     default: function () {
+//       const stageDays = getStageDays(this.packageAmount);
+
+//       return stageDays.map((days, index) => ({
+//         stageNumber: index + 1,
+//         durationDays: days,
+//         status: index === 0 ? "WAITING" : "LOCKED",
+//         earningAmount: 0,
+//         earningStatus: "NOT_RECORDED",
+//         earningRecordedAt: null,
+//         withdrawnAmount: 0,
+//         startedAt: null,
+//         endsAt: null,
+//         pausedAt: null,
+//         completedAt: null,
+//         accumulatedPausedSeconds: 0
+//       }));
+//     }
+//   },
+
+//   transactionId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: "Transaction",
+//     default: null
+//   },
+
+//   // -----------------------------------------
+//   // STAGE 5 SAME-PACKAGE RETOPUP
+//   // -----------------------------------------
+
+//   stage5RetopupAmount: {
+//     type: Number,
+//     default: 0,
+//     min: 0
+//   },
+
+//   stage5RetopupPaidAt: {
+//     type: Date,
+//     default: null
+//   },
+
+//   stage5RetopupTransactionId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: "Transaction",
+//     default: null
+//   },
+
+//   stage5RetopupConfirmed: {
+//     type: Boolean,
+//     default: false
+//   },
+
+//   notes: {
+//     type: String,
+//     default: "",
+//     maxlength: 500
+//   }
+
+// }, { timestamps: true });
+
+
+// // -----------------------------------------
+// // INDEXES
+// // -----------------------------------------
+
+// packageSubscriptionSchema.index({
+//   userId: 1,
+//   purchasedAt: -1
+// });
+
+// packageSubscriptionSchema.index(
+//   {
+//     userId: 1,
+//     packageAmount: 1,
+//     cycleNumber: 1
+//   },
+//   { unique: true }
+// );
+
+// packageSubscriptionSchema.index({
+//   status: 1,
+//   "stages.status": 1,
+//   "stages.endsAt": 1
+// });
+
+// packageSubscriptionSchema.index({
+//   userId: 1,
+//   "stages.earningStatus": 1
+// });
+
+// // Retopup lookup
+ 
+
+// // Same-package retopup subscription lookup
+// packageSubscriptionSchema.index({
+//   userId: 1,
+//   packageAmount: 1,
+//   status: 1,
+//   createdAt: -1
+// });
+
+// module.exports = mongoose.model(
+//   "PackageSubscription",
+//   packageSubscriptionSchema
+// );
+
+
+const mongoose = require("mongoose");
+
+// ============================================
+// PACKAGE AMOUNTS
+// ============================================
+
+const PACKAGE_AMOUNTS = [30, 60, 120, 240, 480, 960];
+
+// ============================================
+// NEW STAGE TIMER SCHEDULE
+// ============================================
+// Stage 1-5 = 0.2 days = 4.8 hours each
+// Stage 6-7 = 0.5 days = 12 hours each
+// Stage 8-14 = 3 days each
+// Same schedule for every package
+// ============================================
+
+const DEFAULT_STAGE_DAYS = [
+  0.2, // Stage 1
+  0.2, // Stage 2
+  0.2, // Stage 3
+  0.2, // Stage 4
+  0.2, // Stage 5
+
+  0.5, // Stage 6
+  0.5, // Stage 7
+
+  3, // Stage 8
+  3, // Stage 9
+  3, // Stage 10
+  3, // Stage 11
+  3, // Stage 12
+  3, // Stage 13
+  3  // Stage 14
+];
+
+// ============================================
+// GET STAGE DAYS
+// ============================================
 
 function getStageDays(packageAmount) {
-  if (Number(packageAmount) === 30) {
-    return [
-      0.2, 0.2, 0.2, 0.2, 0.2,
-      1, // Stage 6 = 24 hours
-      30, 30, 30, 30,
-      30, 30, 30, 30
-    ];
-  }
-
   return [...DEFAULT_STAGE_DAYS];
 }
+
+// ============================================
+// STAGE SCHEMA
+// ============================================
 
 const stageSchema = new mongoose.Schema({
   stageNumber: {
@@ -1100,7 +1418,13 @@ const stageSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ["LOCKED", "WAITING", "RUNNING", "PAUSED", "ACHIEVED"],
+    enum: [
+      "LOCKED",
+      "WAITING",
+      "RUNNING",
+      "PAUSED",
+      "ACHIEVED"
+    ],
     default: "LOCKED"
   },
 
@@ -1112,7 +1436,11 @@ const stageSchema = new mongoose.Schema({
 
   earningStatus: {
     type: String,
-    enum: ["NOT_RECORDED", "PENDING", "RECORDED"],
+    enum: [
+      "NOT_RECORDED",
+      "PENDING",
+      "RECORDED"
+    ],
     default: "NOT_RECORDED"
   },
 
@@ -1152,10 +1480,17 @@ const stageSchema = new mongoose.Schema({
     default: 0,
     min: 0
   }
-}, { _id: false });
 
+}, {
+  _id: false
+});
+
+// ============================================
+// PACKAGE SUBSCRIPTION SCHEMA
+// ============================================
 
 const packageSubscriptionSchema = new mongoose.Schema({
+
   userId: {
     type: Number,
     required: true,
@@ -1170,7 +1505,11 @@ const packageSubscriptionSchema = new mongoose.Schema({
 
   purchaseType: {
     type: String,
-    enum: ["FIRST_PURCHASE", "UPGRADE", "REPEAT"],
+    enum: [
+      "FIRST_PURCHASE",
+      "UPGRADE",
+      "REPEAT"
+    ],
     required: true
   },
 
@@ -1182,7 +1521,13 @@ const packageSubscriptionSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ["PENDING", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"],
+    enum: [
+      "PENDING",
+      "ACTIVE",
+      "PAUSED",
+      "COMPLETED",
+      "CANCELLED"
+    ],
     default: "PENDING",
     index: true
   },
@@ -1208,11 +1553,10 @@ const packageSubscriptionSchema = new mongoose.Schema({
     min: 0
   },
 
-  // Backward compatibility only.
-  // These fields are NOT used for Stage 5 retopup.
- 
+  // Backward compatibility fields
+  // Not used for stage eligibility
 
-   accountingCapAmount: {
+  accountingCapAmount: {
     type: Number,
     default: function () {
       return Number(this.packageAmount) * 2;
@@ -1245,23 +1589,44 @@ const packageSubscriptionSchema = new mongoose.Schema({
     max: 14
   },
 
+  // ============================================
+  // STAGES
+  // ============================================
+
   stages: {
     type: [stageSchema],
+
     default: function () {
-      const stageDays = getStageDays(this.packageAmount);
+      const stageDays =
+        getStageDays(this.packageAmount);
 
       return stageDays.map((days, index) => ({
         stageNumber: index + 1,
+
         durationDays: days,
-        status: index === 0 ? "WAITING" : "LOCKED",
+
+        status:
+          index === 0
+            ? "WAITING"
+            : "LOCKED",
+
         earningAmount: 0,
-        earningStatus: "NOT_RECORDED",
+
+        earningStatus:
+          "NOT_RECORDED",
+
         earningRecordedAt: null,
+
         withdrawnAmount: 0,
+
         startedAt: null,
+
         endsAt: null,
+
         pausedAt: null,
+
         completedAt: null,
+
         accumulatedPausedSeconds: 0
       }));
     }
@@ -1273,9 +1638,10 @@ const packageSubscriptionSchema = new mongoose.Schema({
     default: null
   },
 
-  // -----------------------------------------
-  // STAGE 5 SAME-PACKAGE RETOPUP
-  // -----------------------------------------
+  // ============================================
+  // OLD STAGE 5 RETOPUP FIELDS
+  // BACKWARD COMPATIBILITY ONLY
+  // ============================================
 
   stage5RetopupAmount: {
     type: Number,
@@ -1305,12 +1671,13 @@ const packageSubscriptionSchema = new mongoose.Schema({
     maxlength: 500
   }
 
-}, { timestamps: true });
+}, {
+  timestamps: true
+});
 
-
-// -----------------------------------------
+// ============================================
 // INDEXES
-// -----------------------------------------
+// ============================================
 
 packageSubscriptionSchema.index({
   userId: 1,
@@ -1323,7 +1690,9 @@ packageSubscriptionSchema.index(
     packageAmount: 1,
     cycleNumber: 1
   },
-  { unique: true }
+  {
+    unique: true
+  }
 );
 
 packageSubscriptionSchema.index({
@@ -1337,16 +1706,16 @@ packageSubscriptionSchema.index({
   "stages.earningStatus": 1
 });
 
-// Retopup lookup
- 
-
-// Same-package retopup subscription lookup
 packageSubscriptionSchema.index({
   userId: 1,
   packageAmount: 1,
   status: 1,
   createdAt: -1
 });
+
+// ============================================
+// MODEL
+// ============================================
 
 module.exports = mongoose.model(
   "PackageSubscription",

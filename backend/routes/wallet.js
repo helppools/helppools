@@ -1330,6 +1330,10 @@ router.post("/promo-transfer", authMiddleware, async (req, res) => {
 
 
 
+const DirectEligibilityHistory = require("../models/DirectEligibilityHistory");
+
+const DirectStageTimer = require("../models/DirectStageTimer");
+
  // ==========================================
 // WITHDRAW + CREDIT TO WALLET (UPDATED)
 // ==========================================
@@ -1525,71 +1529,24 @@ const getPackageStageBalances = async (userId) => {
         ) || 0;
 
       return {
-        stageNumber,
-        durationDays: Number(stage.durationDays) || 0,
-        status: stage.status,
-        earningStatus: stage.earningStatus,
-        earned,
-        withdrawn,
-        available: Math.max(0, earned - withdrawn)
-      };
+  stageNumber,
+  durationDays: Number(stage.durationDays) || 0,
+  status: stage.status,
+  earningStatus: stage.earningStatus,
+
+  // TIMER FIELDS
+  startedAt: stage.startedAt || null,
+  endsAt: stage.endsAt || null,
+
+  earned,
+  withdrawn,
+  available: Math.max(0, earned - withdrawn)
+};
     })
   }));
 };
 
-// Validate every selected package stage against its recorded earning.
-// const validatePackageStageItems = async (user, items) => {
-//   const stageItems = items.filter(
-//     item => item.source === "plan_stage"
-//   );
-
-//   for (const item of stageItems) {
-//     const subscription = await PackageSubscription.findOne({
-//       _id: item.subscriptionId,
-//       userId: user.userId
-//     });
-
-//     if (!subscription) {
-//       throw new Error("Selected package subscription was not found.");
-//     }
-
-//     const stage = (subscription.stages || []).find(
-//       entry => Number(entry.stageNumber) === item.stageNumber
-//     );
-
-//     if (!stage || String(stage.earningStatus) !== "RECORDED") {
-//       throw new Error(
-//         `Package stage ${item.stageNumber} has no recorded earning.`
-//       );
-//     }
-
-//     const earned = Number(stage.earningAmount) || 0;
-
-//     const withdrawnRows = await Transaction.find({
-//       userId: user.userId,
-//       source: "package_stage_withdrawal",
-//       subscriptionId: subscription._id,
-//       stageNumber: item.stageNumber,
-//       status: { $in: ["pending", "completed", "success"] }
-//     }).select("amount");
-
-//     const withdrawn = withdrawnRows.reduce(
-//       (sum, tx) =>
-//         sum + (Number(tx.amount?.toString?.() ?? tx.amount) || 0),
-//       0
-//     );
-
-//     const available = Math.max(0, earned - withdrawn);
-
-//     if (item.amount > available) {
-//       throw new Error(
-//         `Insufficient balance in Package $${subscription.packageAmount}, ` +
-//         `Stage ${item.stageNumber}. Available: $${available.toFixed(2)}.`
-//       );
-//     }
-//   }
-// };
-
+ 
 
 const validatePackageStageItems = async (user, items) => {
   const stageItems = items.filter(
@@ -1613,10 +1570,24 @@ const validatePackageStageItems = async (user, items) => {
     );
 
     if (!stage || String(stage.earningStatus) !== "RECORDED") {
-      throw new Error(
-        `Package stage ${item.stageNumber} has no recorded earning.`
-      );
-    }
+  throw new Error(
+    `Package stage ${item.stageNumber} has no recorded earning.`
+  );
+}
+
+// =========================================
+// STAGE TIMER COMPLETION CONDITION
+// =========================================
+
+if (
+  stage.status !== "ACHIEVED" ||
+  !stage.endsAt ||
+  new Date() < new Date(stage.endsAt)
+) {
+  throw new Error(
+    `Package $${subscription.packageAmount}, Stage ${item.stageNumber} timer is not completed yet.`
+  );
+}
 
     // Stage-wise earned balance.
     const earned = Number(stage.earningAmount) || 0;
@@ -1759,11 +1730,369 @@ const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
 
  
 
+// ============================================
+// SEPARATE DIRECT-BASED WITHDRAWAL TIMER
+// ============================================
+
+const PACKAGE_AMOUNTS = [30, 60, 120, 240, 480, 960];
+
+const DEFAULT_STAGE_DAYS = [
+  1, 3, 7, 15,
+  30, 30, 30, 30, 30, 30,
+  30, 30, 30, 30
+];
+
+// IMPORTANT:
+// Yahan har stage ke required direct count set karna hai.
+// Filhal default 2 hai. Requirements confirm hone par
+// is array ko apne actual progression ke according update karna.
+
+const DIRECT_REQUIREMENTS = [
+  2, 2, 2, 2,
+  2, 2, 2, 2,
+  2, 2, 2, 2,
+  2, 2
+];
+
+function getDirectStageDays(stageNumber) {
+  return DEFAULT_STAGE_DAYS[stageNumber - 1] || 30;
+}
+
+function getDirectRequirement(stageNumber) {
+  return DIRECT_REQUIREMENTS[stageNumber - 1] || 2;
+}
+
+function getDirectStageEndDate(startedAt, durationDays) {
+  return new Date(
+    new Date(startedAt).getTime() +
+    durationDays * 24 * 60 * 60 * 1000
+  );
+}
+
+async function getQualifiedDirectCount(userId) {
+  const directUsers = await User.find({
+    sponsorId: userId
+  })
+    .select("userId topUpAmount packages")
+    .lean();
+
+  const directIds = directUsers.map(
+    direct => Number(direct.userId)
+  );
+
+  const subscriptions = directIds.length
+    ? await PackageSubscription.find({
+        userId: { $in: directIds },
+        packageAmount: 30,
+        status: { $in: ["ACTIVE", "COMPLETED"] }
+      })
+        .select("userId")
+        .lean()
+    : [];
+
+  const qualifiedIds = new Set(
+    subscriptions.map(item => Number(item.userId))
+  );
+
+  // Legacy package support
+  for (const direct of directUsers) {
+    const amounts = [
+      Number(direct.topUpAmount || 0),
+      ...(Array.isArray(direct.packages)
+        ? direct.packages.map(item =>
+            Number(item.amount || 0)
+          )
+        : [])
+    ];
+
+    if (amounts.includes(30)) {
+      qualifiedIds.add(Number(direct.userId));
+    }
+  }
+
+  return qualifiedIds.size;
+}
+
+
+async function syncDirectStageTimers(user, packageAmount) {
+  const matchingDirects = await getQualifiedDirectCount(
+    Number(user.userId)
+  );
+
+  const results = [];
+
+  // Har package ke liye 2 qualified directs required
+  const requiredDirects = 2;
+
+  // Direct condition complete nahi hui to timer start nahi hoga
+  if (matchingDirects < requiredDirects) {
+    const existingTimers = await DirectStageTimer.find({
+      userId: Number(user.userId),
+      packageAmount: Number(packageAmount)
+    }).sort({ stageNumber: 1 });
+
+    return {
+      matchingDirects,
+      timers: existingTimers.map(timer => ({
+        stageNumber: timer.stageNumber,
+        requiredDirects: timer.requiredDirects,
+        matchingDirects,
+        startedAt: timer.startedAt,
+        endsAt: timer.endsAt,
+        completed: Boolean(timer.completed)
+      }))
+    };
+  }
+
+
+  // ==========================================
+// ACTUAL 2 QUALIFIED DIRECT COMPLETION TIME
+// ==========================================
+
+let directQualificationTime = null;
+
+let directEligibilityHistory =
+  await DirectEligibilityHistory.findOne({
+    userId: Number(user.userId)
+  });
+
+if (
+  directEligibilityHistory?.achieved &&
+  directEligibilityHistory?.achievedAt
+) {
+  directQualificationTime = new Date(
+    directEligibilityHistory.achievedAt
+  );
+}
+
+// History missing hai to actual qualifying activation
+// dates se achievement timestamp calculate karo.
+if (!directQualificationTime) {
+  const eligibility = await checkPackageDirectEligibility(
+    user,
+    Number(packageAmount)
+  );
+
+  if (
+    eligibility?.eligibilityAchievedAt
+  ) {
+    directQualificationTime = new Date(
+      eligibility.eligibilityAchievedAt
+    );
+  }
+}
+
+// Historical timestamp unavailable ho to fallback.
+// Ye sirf legacy records ke liye hai.
+if (
+  !directQualificationTime ||
+  isNaN(directQualificationTime.getTime())
+) {
+  directQualificationTime = new Date();
+}
+
+  // Sequential Stage 1 to Stage 14
+  let previousStageCompleted = true;
+  let previousStageEndDate = null;
+
+  for (let stageNumber = 1; stageNumber <= 14; stageNumber++) {
+    const durationDays = getDirectStageDays(stageNumber);
+
+    let timer = await DirectStageTimer.findOne({
+      userId: Number(user.userId),
+      packageAmount: Number(packageAmount),
+      stageNumber
+    });
+
+    // Previous stage complete hone se pehle
+    // next stage timer create nahi hoga
+    if (!previousStageCompleted) {
+      break;
+    }
+
+   if (!timer) {
+  const startedAt = previousStageEndDate
+    ? new Date(previousStageEndDate)
+    : new Date(directQualificationTime);
+
+  const endsAt = getDirectStageEndDate(
+    startedAt,
+    durationDays
+  );
+
+      timer = await DirectStageTimer.create({
+        userId: Number(user.userId),
+        packageAmount: Number(packageAmount),
+        stageNumber,
+        requiredDirects,
+        matchingDirects,
+        startedAt,
+        endsAt,
+        completed: false
+      });
+    }
+
+    // Purane incorrectly-created timers ko sequential timing ke according correct karo
+    // ==========================================
+// CORRECT OLD TIMER START DATES
+// ==========================================
+
+// Stage 1 actual direct qualification date se start hoga
+if (
+  stageNumber === 1 &&
+  timer.startedAt &&
+  directQualificationTime &&
+  new Date(timer.startedAt) > new Date(directQualificationTime)
+) {
+  timer.startedAt = new Date(directQualificationTime);
+
+  timer.endsAt = getDirectStageEndDate(
+    timer.startedAt,
+    durationDays
+  );
+
+  timer.completed =
+    new Date() >= new Date(timer.endsAt);
+}
+
+// Stage 2 onwards previous stage complete hone ke baad
+if (
+  stageNumber > 1 &&
+  previousStageEndDate &&
+  timer.startedAt &&
+  new Date(timer.startedAt) < new Date(previousStageEndDate)
+) {
+  timer.startedAt = new Date(previousStageEndDate);
+
+  timer.endsAt = getDirectStageEndDate(
+    timer.startedAt,
+    durationDays
+  );
+
+  timer.completed =
+    new Date() >= new Date(timer.endsAt);
+}
+
+    // Direct count update; timer reset nahi hoga
+    timer.matchingDirects = matchingDirects;
+
+    // Timer complete check
+    if (
+      timer.startedAt &&
+      timer.endsAt &&
+      new Date() >= new Date(timer.endsAt)
+    ) {
+      timer.completed = true;
+    }
+
+    await timer.save();
+
+    results.push({
+      stageNumber,
+      requiredDirects,
+      matchingDirects,
+      startedAt: timer.startedAt,
+      endsAt: timer.endsAt,
+      completed: Boolean(timer.completed)
+    });
+
+    // Next stage previous stage ke end time se start hoga
+    previousStageCompleted = Boolean(timer.completed);
+    previousStageEndDate = timer.endsAt;
+
+    // Current stage complete nahi hui to loop stop
+    if (!timer.completed) {
+      break;
+    }
+  }
+
+  return {
+    matchingDirects,
+    timers: results
+  };
+}
+
+ 
+
+async function validateDirectStageTimerItems(user, items) {
+  const stageItems = items.filter(
+    item => item.source === "plan_stage"
+  );
+
+  for (const item of stageItems) {
+    const subscription = await PackageSubscription.findOne({
+      _id: item.subscriptionId,
+      userId: user.userId
+    }).select("packageAmount");
+
+    if (!subscription) {
+      throw new Error("Selected package subscription was not found.");
+    }
+
+    const packageAmount = Number(subscription.packageAmount);
+    const stageNumber = Number(item.stageNumber);
+
+    const timerData = await syncDirectStageTimers(
+      user,
+      packageAmount
+    );
+
+    // Direct qualification check
+    const matchingDirects =
+      Number(timerData.matchingDirects) || 0;
+
+    const requiredDirects = 2;
+    const remainingDirects = Math.max(
+      0,
+      requiredDirects - matchingDirects
+    );
+
+    // First check whether required Directs are completed
+    if (matchingDirects < requiredDirects) {
+      throw new Error(
+        `Package $${packageAmount}, Stage ${stageNumber}: ` +
+        `You have ${matchingDirects}/${requiredDirects} qualified directs. ` +
+        `You need ${remainingDirects} more qualified direct(s) ` +
+        `to unlock this stage.`
+      );
+    }
+
+    // Then check stage timer
+    const timer = timerData.timers.find(
+      entry => Number(entry.stageNumber) === stageNumber
+    );
+
+    if (!timer) {
+      throw new Error(
+        `Package $${packageAmount}, Stage ${stageNumber} is locked. ` +
+        `Please complete the previous stage timer first.`
+      );
+    }
+
+    if (!timer.startedAt || !timer.endsAt) {
+      throw new Error(
+        `Package $${packageAmount}, Stage ${stageNumber} timer has not started.`
+      );
+    }
+
+    if (
+      !timer.completed ||
+      new Date() < new Date(timer.endsAt)
+    ) {
+      throw new Error(
+        `Package $${packageAmount}, Stage ${stageNumber} ` +
+        ` timer is not completed yet.`
+      );
+    }
+  }
+}
+
+
 async function checkPackageDirectEligibility(user, requiredPackage) {
   const userPackage = Number(requiredPackage);
+  const requiredDirects = 2;
 
   const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
-  const requiredDirects = 2;
 
   if (!PACKAGE_LEVELS.includes(userPackage)) {
     return {
@@ -1771,12 +2100,11 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
       message: "Invalid package selected.",
       packageAmount: userPackage,
       matchingDirects: 0,
-      requiredDirects: 2
+      requiredDirects
     };
   }
 
-  // Har package ke liye 2 direct referrals required.
-  // Direct ka active package $30 hona chahiye.
+  // User ke direct referrals
   const directUsers = await User.find({
     sponsorId: user.userId
   })
@@ -1785,22 +2113,22 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
 
   const directIds = directUsers.map(item => item.userId);
 
+  // $30 active/completed package wale directs
   const subscriptions = directIds.length
     ? await PackageSubscription.find({
         userId: { $in: directIds },
         packageAmount: 30,
         status: { $in: ["ACTIVE", "COMPLETED"] }
       })
-        .select("userId packageAmount")
+        .select("userId packageAmount activatedAt purchasedAt createdAt")
         .lean()
     : [];
 
-  // Har direct ko sirf ek baar count karo.
   const matchingDirectIds = new Set(
-    subscriptions.map(item => String(item.userId))
+    subscriptions.map(item => Number(item.userId))
   );
 
-  // Existing legacy package records support unchanged.
+  // Legacy package support
   for (const direct of directUsers) {
     const legacyAmounts = [
       Number(direct.topUpAmount || 0),
@@ -1810,13 +2138,54 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
     ];
 
     if (legacyAmounts.includes(30)) {
-      matchingDirectIds.add(String(direct.userId));
+      matchingDirectIds.add(Number(direct.userId));
     }
   }
 
   const matchingDirects = matchingDirectIds.size;
 
-  // First condition: 2 directs required.
+
+  // ==========================================
+// ACTUAL SECOND QUALIFIED DIRECT ACTIVATION
+// ==========================================
+
+const qualifiedDirectActivationDates = [];
+
+for (const directId of matchingDirectIds) {
+  const directSubscriptions = subscriptions.filter(
+    subscription =>
+      Number(subscription.userId) === Number(directId)
+  );
+
+  const activationDate = directSubscriptions
+    .map(subscription =>
+      subscription.activatedAt ||
+      subscription.purchasedAt ||
+      subscription.createdAt
+    )
+    .filter(Boolean)
+    .map(date => new Date(date))
+    .filter(date => !isNaN(date.getTime()))
+    .sort((a, b) => a - b)[0];
+
+  if (activationDate) {
+    qualifiedDirectActivationDates.push(
+      activationDate
+    );
+  }
+}
+
+qualifiedDirectActivationDates.sort(
+  (a, b) => a - b
+);
+
+const eligibilityAchievedAt =
+  qualifiedDirectActivationDates.length >= 2
+    ? qualifiedDirectActivationDates[1]
+    : null;
+
+
+  // 2 qualified directs hone chahiye
   if (matchingDirects < requiredDirects) {
     return {
       allowed: false,
@@ -1829,47 +2198,52 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
     };
   }
 
-  // Second condition: next package upgrade required.
-  const currentIndex = PACKAGE_LEVELS.indexOf(userPackage);
-  const nextPackage = PACKAGE_LEVELS[currentIndex + 1];
+  // =========================================
+  // SEPARATE ELIGIBILITY HISTORY TRACKER
+  // =========================================
 
-  // $960 is the highest package, so no next upgrade is required.
-  if (!nextPackage) {
-    return {
-      allowed: true,
-      message: "Package eligibility completed.",
-      packageAmount: userPackage,
-      matchingDirects,
-      requiredDirects
-    };
+  let history = await DirectEligibilityHistory.findOne({
+    userId: Number(user.userId)
+  });
+
+  if (!history) {
+    history = new DirectEligibilityHistory({
+      userId: Number(user.userId),
+      requiredDirects,
+      achieved: false,
+      achievedAt: null,
+      qualifyingDirectIds: []
+    });
   }
 
-  const nextUpgrade = await PackageSubscription.findOne({
-    userId: user.userId,
-    packageAmount: nextPackage,
-    purchaseType: "UPGRADE",
-    status: "ACTIVE"
-  }).select("_id");
+  // Qualification complete hone par timestamp save karo.
+  // Timestamp eligible direct package activation se derive hoga.
+ // =========================================
+// SAVE DIRECT ELIGIBILITY ACHIEVEMENT TIME
+// =========================================
 
-  if (!nextUpgrade) {
-    return {
-      allowed: false,
-      message:
-        `Please upgrade your package to $${nextPackage} before withdrawing this income.`,
-      packageAmount: userPackage,
-      nextPackage,
-      matchingDirects,
-      requiredDirects
-    };
-  }
+if (!history.achieved && matchingDirects >= requiredDirects) {
+  history.achieved = true;
+
+  // Actual second qualified direct activation time
+  history.achievedAt =
+    eligibilityAchievedAt || new Date();
+
+  history.qualifyingDirectIds = [
+    ...matchingDirectIds
+  ].slice(0, requiredDirects);
+
+  await history.save();
+}
 
   return {
     allowed: true,
     message: "Package eligibility completed.",
     packageAmount: userPackage,
-    nextPackage,
     matchingDirects,
-    requiredDirects
+    requiredDirects,
+    eligibilityAchieved: history.achieved,
+    eligibilityAchievedAt: history.achievedAt
   };
 }
 
@@ -1910,7 +2284,7 @@ async function checkSelectedPackageStageEligibility(user, items) {
 }
 
 // GET: logged-in user's withdrawable balances, including package-wise stages.
-router.get("/withdrawable/:userId", authMiddleware, async (req, res) => {
+ router.get("/withdrawable/:userId", authMiddleware, async (req, res) => {
   try {
     const requestedId = Number(req.params.userId);
     const loggedInId = Number(req.user.userId);
@@ -1931,8 +2305,35 @@ router.get("/withdrawable/:userId", authMiddleware, async (req, res) => {
       });
     }
 
+    // ==========================================
+    // EXISTING PACKAGE STAGE BALANCES
+    // ==========================================
+
     const packageSubscriptions =
       await getPackageStageBalances(loggedInId);
+
+    // ==========================================
+    // NEW SEPARATE DIRECT STAGE TIMER
+    // ==========================================
+
+   const directTimerData = [];
+
+for (const packageAmount of PACKAGE_AMOUNTS) {
+  const timerData = await syncDirectStageTimers(
+    user,
+    packageAmount
+  );
+
+  directTimerData.push({
+    packageAmount,
+    matchingDirects: timerData.matchingDirects,
+    timers: timerData.timers
+  });
+}
+
+    // ==========================================
+    // RESPONSE
+    // ==========================================
 
     return res.json({
       walletBalance: Number(user.walletBalance) || 0,
@@ -1941,7 +2342,13 @@ router.get("/withdrawable/:userId", authMiddleware, async (req, res) => {
       plan: Number(user.planIncome) || 0,
       reward: Number(user.rewardIncome) || 0,
       pool: Number(user.poolIncome) || 0,
+
+      // Existing package timer system
       packageSubscriptions,
+
+      // NEW separate direct timer system
+    directStageTimers: directTimerData,
+
       isUserToppedUp: Boolean(user.isToppedUp)
     });
 
@@ -2002,6 +2409,9 @@ if (String(user.role).toLowerCase() === "leader") {
     );
 
     await validatePackageStageItems(user, normalized);
+
+    await validateDirectStageTimerItems(user, normalized);
+
 
     const eligibility = await checkSelectedPackageStageEligibility(
       user,
@@ -2172,6 +2582,9 @@ if (String(user.role).toLowerCase() === "leader") {
     );
 
     await validatePackageStageItems(user, normalized);
+
+
+    await validateDirectStageTimerItems(user, normalized);
 
     const eligibility = await checkSelectedPackageStageEligibility(
       user,
