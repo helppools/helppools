@@ -1,8 +1,9 @@
-require('dotenv').config();
-
 const mongoose = require('mongoose');
 const readline = require('readline');
 const User = require('../models/User');
+
+// MongoDB URI directly in script
+const MONGO_URI = 'mongodb://127.0.0.1:27017/helpingpools';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -11,15 +12,9 @@ const rl = readline.createInterface({
 
 async function unblockAllBlockedUsers() {
   try {
-    const mongoURI = process.env.MONGO_URI;
-
-    if (!mongoURI) {
-      throw new Error('MONGO_URI is missing from .env');
-    }
-
     console.log('\n🔌 Connecting to MongoDB...');
 
-    await mongoose.connect(mongoURI);
+    await mongoose.connect(MONGO_URI);
 
     console.log('✅ MongoDB connected successfully\n');
 
@@ -36,7 +31,7 @@ async function unblockAllBlockedUsers() {
     ).sort({ userId: 1 });
 
     console.log('==========================================');
-    console.log('       BLOCKED USERS LIST');
+    console.log('          BLOCKED USERS LIST');
     console.log('==========================================\n');
 
     if (blockedUsers.length === 0) {
@@ -47,26 +42,11 @@ async function unblockAllBlockedUsers() {
     console.log(`Total blocked users: ${blockedUsers.length}\n`);
 
     blockedUsers.forEach((user, index) => {
-      console.log(
-        `${index + 1}. User ID: ${user.userId}`
-      );
-
-      console.log(
-        `   Name: ${user.name || 'N/A'}`
-      );
-
-      console.log(
-        `   Email: ${user.email || 'N/A'}`
-      );
-
-      console.log(
-        `   Mobile: ${user.mobile || 'N/A'}`
-      );
-
-      console.log(
-        `   Status: ${user.isBlocked ? 'BLOCKED' : 'UNBLOCKED'}`
-      );
-
+      console.log(`${index + 1}. User ID: ${user.userId}`);
+      console.log(`   Name: ${user.name || 'N/A'}`);
+      console.log(`   Email: ${user.email || 'N/A'}`);
+      console.log(`   Mobile: ${user.mobile || 'N/A'}`);
+      console.log(`   Status: BLOCKED`);
       console.log('------------------------------------------');
     });
 
@@ -74,49 +54,38 @@ async function unblockAllBlockedUsers() {
     console.log(`You are about to unblock ${blockedUsers.length} users.`);
     console.log('This action will update their database status.\n');
 
-    rl.question(
-      'Type UNBLOCK to confirm: ',
-      async (answer) => {
-        if (answer.trim() !== 'UNBLOCK') {
-          console.log('\n❌ Operation cancelled.');
-          await mongoose.disconnect();
-          rl.close();
-          return;
+    const answer = await new Promise((resolve) => {
+      rl.question('Type UNBLOCK to confirm: ', resolve);
+    });
+
+    if (answer.trim() !== 'UNBLOCK') {
+      console.log('\n❌ Operation cancelled.');
+      return;
+    }
+
+    console.log('\n⏳ Unblocking users...');
+
+    const result = await User.updateMany(
+      { isBlocked: true },
+      {
+        $set: {
+          isBlocked: false
         }
-
-        console.log('\n⏳ Unblocking users...');
-
-        const result = await User.updateMany(
-          { isBlocked: true },
-          {
-            $set: {
-              isBlocked: false
-            }
-          }
-        );
-
-        console.log('\n==========================================');
-        console.log('          SUCCESS');
-        console.log('==========================================');
-
-        console.log(
-          `✅ Users unblocked: ${result.modifiedCount}`
-        );
-
-        console.log(
-          `📊 Total matched: ${result.matchedCount}`
-        );
-
-        console.log('\nAll blocked users are now unblocked.');
-
-        await mongoose.disconnect();
-        rl.close();
       }
     );
 
+    console.log('\n==========================================');
+    console.log('              SUCCESS');
+    console.log('==========================================');
+
+    console.log(`✅ Users unblocked: ${result.modifiedCount}`);
+    console.log(`📊 Total matched: ${result.matchedCount}`);
+
+    console.log('\n🎉 All blocked users are now unblocked!');
+
   } catch (error) {
     console.error('\n❌ ERROR:', error.message);
-
+  } finally {
     if (mongoose.connection.readyState !== 0) {
       await mongoose.disconnect();
     }
