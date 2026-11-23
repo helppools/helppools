@@ -3441,57 +3441,136 @@ router.post('/auth/register', verifyAdmin, async (req, res) => {
 
  
 
-// ✅ Get all blocked users
-router.get("/blocked-users", async (req, res) => {
+// // ✅ Get all blocked users
+// router.get("/blocked-users", async (req, res) => {
+//   try {
+//     const users = await User.find({ isBlocked: true }).sort({ createdAt: -1 });
+//     // add blockedAt timestamp if you track it
+//     const formatted = users.map((u) => ({
+//       _id: u._id,
+//       userId: u.userId,
+//       name: u.name,
+//       email: u.email,
+//       status: u.isBlocked ? "Blocked" : "Active",
+//       blockedAt: u.updatedAt, // assuming last update was block time
+//     }));
+//     res.json(formatted);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+// // ✅ Unblock a user
+// router.put("/unblock-user/:userId", async (req, res) => {
+//   try {
+// const user = await User.findOne({ userId: req.params.userId });
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     user.isBlocked = false;
+//     await user.save();
+//     res.json({ message: "User unblocked successfully" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+// // ✅ Optional: Block a user
+// router.put("/block-user/:userId", async (req, res) => {
+//   try {
+// const user = await User.findOne({ userId: req.params.userId });
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     user.isBlocked = true;
+//     await user.save();
+//     res.json({ message: "User blocked successfully" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+
+// ✅ Get all blocked users - ADMIN ONLY
+router.get("/blocked-users", verifyAdmin, async (req, res) => {
   try {
     const users = await User.find({ isBlocked: true }).sort({ createdAt: -1 });
-    // add blockedAt timestamp if you track it
+
     const formatted = users.map((u) => ({
       _id: u._id,
       userId: u.userId,
       name: u.name,
       email: u.email,
       status: u.isBlocked ? "Blocked" : "Active",
-      blockedAt: u.updatedAt, // assuming last update was block time
+      blockedAt: u.updatedAt,
     }));
+
     res.json(formatted);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Get Blocked Users Error:", err);
+
+    res.status(500).json({
+      message: "Server error",
+    });
   }
 });
 
-// ✅ Unblock a user
-router.put("/unblock-user/:userId", async (req, res) => {
+
+// ✅ Unblock a user - ADMIN ONLY
+router.put("/unblock-user/:userId", verifyAdmin, async (req, res) => {
   try {
-const user = await User.findOne({ userId: req.params.userId });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await User.findOne({ userId: req.params.userId });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
 
     user.isBlocked = false;
     await user.save();
-    res.json({ message: "User unblocked successfully" });
+
+    res.json({
+      success: true,
+      message: "User unblocked successfully",
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Unblock User Error:", err);
+
+    res.status(500).json({
+      message: "Server error",
+    });
   }
 });
 
-// ✅ Optional: Block a user
-router.put("/block-user/:userId", async (req, res) => {
+
+// ✅ Block a user - ADMIN ONLY
+router.put("/block-user/:userId", verifyAdmin, async (req, res) => {
   try {
-const user = await User.findOne({ userId: req.params.userId });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await User.findOne({ userId: req.params.userId });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
 
     user.isBlocked = true;
     await user.save();
-    res.json({ message: "User blocked successfully" });
+
+    res.json({
+      success: true,
+      message: "User blocked successfully",
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Block User Error:", err);
+
+    res.status(500).json({
+      message: "Server error",
+    });
   }
 });
-
-
 
 // Get all deposits with user names
  
