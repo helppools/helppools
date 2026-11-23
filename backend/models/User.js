@@ -60,6 +60,12 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
+
+    loginResetToken: String,
+loginResetTokenExpiry: Date,
+
+transactionResetToken: String,
+transactionResetTokenExpiry: Date,
     // ==========================================
     // REFERRAL & TEAM
     // ==========================================

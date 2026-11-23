@@ -982,6 +982,7 @@ await sendEmail({
    FORGOT PASSWORD
 ===================================================== */
 
+
 router.post('/forgot-password', checkFeature(), async (req, res) => {
   const { userId } = req.body;
 
@@ -1024,24 +1025,38 @@ router.post('/forgot-password', checkFeature(), async (req, res) => {
 
     if ((user.passwordResetCount || 0) >= 3) {
       return res.status(429).json({
-        message: 'Daily limit exceeded. Only 3 password reset requests are allowed per day.'
+        message:
+          'Daily limit exceeded. Only 3 password reset requests are allowed per day.'
       });
     }
 
-    // Generate secure reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    // Generate two independent secure tokens
+    const loginResetToken = crypto.randomBytes(32).toString('hex');
 
-    user.resetToken = resetToken;
-    user.resetTokenExpiry = Date.now() + 60 * 60 * 1000;
+    const transactionResetToken = crypto.randomBytes(32).toString('hex');
+
+    // Login password reset token
+    user.loginResetToken = loginResetToken;
+    user.loginResetTokenExpiry = new Date(
+      Date.now() + 60 * 60 * 1000
+    );
+
+    // Transaction password reset token
+    user.transactionResetToken = transactionResetToken;
+    user.transactionResetTokenExpiry = new Date(
+      Date.now() + 60 * 60 * 1000
+    );
 
     user.passwordResetCount = (user.passwordResetCount || 0) + 1;
     user.lastPasswordResetDate = now;
 
     await user.save();
 
-    // Helping Pools domain
-    const resetLink =
-      `https://helpingpools.online/reset-password/${resetToken}`;
+    const loginResetLink =
+      `https://helpingpools.online/reset-password/${loginResetToken}`;
+
+    const transactionResetLink =
+      `https://helpingpools.online/reset-transaction-password/${transactionResetToken}`;
 
     // Escape name for HTML email
     const safeName = String(user.name || 'Member').replace(
@@ -1055,7 +1070,6 @@ router.post('/forgot-password', checkFeature(), async (req, res) => {
       })[char]
     );
 
-    // Send branded email
     await sendEmail({
       email: user.email,
       subject: 'Password Reset Request | Helping Pools',
@@ -1063,12 +1077,15 @@ router.post('/forgot-password', checkFeature(), async (req, res) => {
       message: `
 Hello ${user.name || 'Member'},
 
-We received a request to reset your Helping Pools account password.
+We received a request to reset your Helping Pools account passwords.
 
-Reset your password here:
-${resetLink}
+LOGIN PASSWORD RESET:
+${loginResetLink}
 
-This link expires in 1 hour.
+TRANSACTION PASSWORD RESET:
+${transactionResetLink}
+
+Both links expire in 1 hour.
 
 If you did not request this, please ignore this email.
       `,
@@ -1081,7 +1098,7 @@ If you did not request this, please ignore this email.
         font-family:Arial,sans-serif;
       ">
         <div style="
-          max-width:520px;
+          max-width:560px;
           margin:auto;
           background:#ffffff;
           border-radius:18px;
@@ -1103,6 +1120,7 @@ If you did not request this, please ignore this email.
             ">
               HELPING <span style="color:#f5d98a;">POOLS</span>
             </h1>
+
             <p style="
               margin:9px 0 0;
               color:#d9f2e3;
@@ -1116,19 +1134,6 @@ If you did not request this, please ignore this email.
 
           <div style="padding:32px 25px;text-align:center;">
 
-            <div style="
-              width:65px;
-              height:65px;
-              line-height:65px;
-              margin:0 auto 20px;
-              border-radius:18px;
-              background:#eaf6ee;
-              color:#08734d;
-              font-size:30px;
-            ">
-              &#128274;
-            </div>
-
             <h2 style="
               color:#075b42;
               font-size:23px;
@@ -1137,28 +1142,101 @@ If you did not request this, please ignore this email.
               Password Reset Request
             </h2>
 
-            <p style="color:#52665a;font-size:14px;line-height:1.7;">
+            <p style="
+              color:#52665a;
+              font-size:14px;
+              line-height:1.7;
+            ">
               Hello <strong>${safeName}</strong>,
             </p>
 
-            <p style="color:#64756a;font-size:14px;line-height:1.7;">
-              We received a request to reset your Helping Pools account
-              password. Click below to create a new password.
+            <p style="
+              color:#64756a;
+              font-size:14px;
+              line-height:1.7;
+            ">
+              We received a request to reset your Helping Pools
+              account passwords. Please select the password
+              you want to reset below.
             </p>
 
-            <a href="${resetLink}" style="
-              display:inline-block;
-              margin:20px 0;
-              padding:15px 30px;
-              background:linear-gradient(110deg,#075b42,#119363);
-              color:#ffffff;
-              text-decoration:none;
-              border-radius:10px;
-              font-size:14px;
-              font-weight:bold;
+            <!-- LOGIN PASSWORD -->
+            <div style="
+              margin:25px 0 12px;
+              padding:20px;
+              background:#f1f8f4;
+              border:1px solid #dcebe1;
+              border-radius:12px;
             ">
-              RESET MY PASSWORD
-            </a>
+              <h3 style="
+                color:#075b42;
+                margin:0 0 12px;
+                font-size:17px;
+              ">
+                Login Password
+              </h3>
+
+              <p style="
+                color:#64756a;
+                font-size:13px;
+                line-height:1.6;
+                margin:0 0 15px;
+              ">
+                Use this button to reset your account login password.
+              </p>
+
+              <a href="${loginResetLink}" style="
+                display:inline-block;
+                padding:14px 24px;
+                background:linear-gradient(110deg,#075b42,#119363);
+                color:#ffffff;
+                text-decoration:none;
+                border-radius:10px;
+                font-size:14px;
+                font-weight:bold;
+              ">
+                RESET LOGIN PASSWORD
+              </a>
+            </div>
+
+            <!-- TRANSACTION PASSWORD -->
+            <div style="
+              margin:15px 0 25px;
+              padding:20px;
+              background:#fff8e6;
+              border:1px solid #f0e0b7;
+              border-radius:12px;
+            ">
+              <h3 style="
+                color:#8b6a22;
+                margin:0 0 12px;
+                font-size:17px;
+              ">
+                Transaction Password
+              </h3>
+
+              <p style="
+                color:#7c6b46;
+                font-size:13px;
+                line-height:1.6;
+                margin:0 0 15px;
+              ">
+                Use this button to reset your transaction password.
+              </p>
+
+              <a href="${transactionResetLink}" style="
+                display:inline-block;
+                padding:14px 24px;
+                background:linear-gradient(110deg,#b8860b,#d6a62b);
+                color:#ffffff;
+                text-decoration:none;
+                border-radius:10px;
+                font-size:14px;
+                font-weight:bold;
+              ">
+                RESET TRANSACTION PASSWORD
+              </a>
+            </div>
 
             <div style="
               padding:14px;
@@ -1171,8 +1249,8 @@ If you did not request this, please ignore this email.
               text-align:left;
             ">
               <strong>Security Notice</strong><br/>
-              This password reset link expires in 1 hour.
-              Do not share this link with anyone.
+              Both reset links expire in 1 hour.
+              Do not share these links with anyone.
             </div>
 
             <p style="
@@ -1205,7 +1283,7 @@ If you did not request this, please ignore this email.
     });
 
     return res.json({
-      message: 'Password reset link sent to your registered email.'
+      message: 'Password reset links sent to your registered email.'
     });
 
   } catch (err) {
@@ -1218,9 +1296,235 @@ If you did not request this, please ignore this email.
 });
 
 
+
 /* =====================================================
    RESET PASSWORD
 ===================================================== */
+
+// router.post('/reset-password/:token', async (req, res) => {
+//   const { token } = req.params;
+//   const { newPassword } = req.body;
+
+//   try {
+//     if (!token || !newPassword) {
+//       return res.status(400).json({
+//         message: 'Reset token and new password are required.'
+//       });
+//     }
+
+//     if (
+//       typeof newPassword !== 'string' ||
+//       newPassword.length < 6
+//     ) {
+//       return res.status(400).json({
+//         message: 'Password must be at least 6 characters long.'
+//       });
+//     }
+
+//     // Find valid reset token
+//     const user = await User.findOne({
+//       resetToken: token,
+//       resetTokenExpiry: { $gt: Date.now() }
+//     });
+
+//     if (!user) {
+//       return res.status(400).json({
+//         message: 'Invalid or expired password reset link.'
+//       });
+//     }
+
+//     // Update login password only
+//     user.password = newPassword;
+
+//     // Remove token after successful reset
+//     user.resetToken = undefined;
+//     user.resetTokenExpiry = undefined;
+
+//     await user.save();
+
+//     // Confirmation email
+//     try {
+//       const safeName = String(user.name || 'Member').replace(
+//         /[&<>"']/g,
+//         char => ({
+//           '&': '&amp;',
+//           '<': '&lt;',
+//           '>': '&gt;',
+//           '"': '&quot;',
+//           "'": '&#39;'
+//         })[char]
+//       );
+
+//       await sendEmail({
+//         email: user.email,
+//         subject: 'Password Changed Successfully | Helping Pools',
+
+//         message: `
+// Hello ${user.name || 'Member'},
+
+// Your Helping Pools account password has been changed successfully.
+
+// User ID: ${user.userId}
+
+// If you did not make this change, contact support immediately.
+
+// Login:
+// https://helpingpools.online/login
+//         `,
+
+//         html: `
+//         <div style="
+//           margin:0;
+//           padding:35px 12px;
+//           background:#f1f8f4;
+//           font-family:Arial,sans-serif;
+//         ">
+//           <div style="
+//             max-width:520px;
+//             margin:auto;
+//             background:#ffffff;
+//             border:1px solid #dcebe1;
+//             border-radius:18px;
+//             overflow:hidden;
+//             box-shadow:0 10px 35px rgba(0,60,35,.08);
+//           ">
+
+//             <div style="
+//               padding:28px 20px;
+//               text-align:center;
+//               background:linear-gradient(120deg,#075b42,#119363);
+//             ">
+//               <h1 style="
+//                 margin:0;
+//                 color:#ffffff;
+//                 font-size:25px;
+//                 font-weight:900;
+//               ">
+//                 HELPING <span style="color:#f5d98a;">POOLS</span>
+//               </h1>
+
+//               <p style="
+//                 color:#d9f2e3;
+//                 font-size:12px;
+//                 letter-spacing:2px;
+//                 font-weight:bold;
+//                 margin:9px 0 0;
+//               ">
+//                 SECURITY CONFIRMATION
+//               </p>
+//             </div>
+
+//             <div style="padding:32px 25px;text-align:center;">
+
+//               <div style="
+//                 width:65px;
+//                 height:65px;
+//                 line-height:65px;
+//                 margin:0 auto 20px;
+//                 border-radius:50%;
+//                 background:#eaf8ef;
+//                 color:#08734d;
+//                 font-size:32px;
+//               ">
+//                 &#10004;
+//               </div>
+
+//               <h2 style="
+//                 color:#075b42;
+//                 font-size:23px;
+//                 margin:0 0 15px;
+//               ">
+//                 Password Changed Successfully!
+//               </h2>
+
+//               <p style="color:#52665a;font-size:14px;line-height:1.7;">
+//                 Hello <strong>${safeName}</strong>,
+//               </p>
+
+//               <p style="color:#64756a;font-size:14px;line-height:1.7;">
+//                 Your Helping Pools account password has been
+//                 successfully updated.
+//               </p>
+
+//               <div style="
+//                 padding:16px;
+//                 margin:22px 0;
+//                 background:#f1f8f4;
+//                 border:1px solid #dcebe1;
+//                 border-radius:12px;
+//                 text-align:left;
+//                 color:#426253;
+//                 font-size:13px;
+//                 line-height:1.9;
+//               ">
+//                 <strong>Account Details</strong><br/>
+//                 User ID: <strong>${user.userId}</strong><br/>
+//                 Password: <strong>Updated successfully</strong>
+//               </div>
+
+//               <a href="https://helpingpools.online/login" style="
+//                 display:inline-block;
+//                 padding:14px 30px;
+//                 background:linear-gradient(110deg,#075b42,#119363);
+//                 color:#ffffff;
+//                 text-decoration:none;
+//                 border-radius:10px;
+//                 font-size:14px;
+//                 font-weight:bold;
+//               ">
+//                 LOGIN NOW
+//               </a>
+
+//               <p style="
+//                 color:#87958b;
+//                 font-size:12px;
+//                 line-height:1.6;
+//                 margin-top:22px;
+//               ">
+//                 If you did not make this change, contact support
+//                 immediately to secure your account.
+//               </p>
+
+//             </div>
+
+//             <div style="
+//               padding:17px;
+//               text-align:center;
+//               background:#f5f9f6;
+//               border-top:1px solid #e5eee7;
+//               color:#829187;
+//               font-size:11px;
+//             ">
+//               &copy; ${new Date().getFullYear()} Helping Pools.
+//               All rights reserved.
+//             </div>
+
+//           </div>
+//         </div>
+//         `
+//       });
+
+//     } catch (emailError) {
+//       console.error(
+//         'Password confirmation email failed:',
+//         emailError.message
+//       );
+//     }
+
+//     return res.json({
+//       message: 'Password reset successful.',
+//       userId: user.userId
+//     });
+
+//   } catch (err) {
+//     console.error('Reset password error:', err);
+
+//     return res.status(500).json({
+//       message: 'Server error. Please try again later.'
+//     });
+//   }
+// });
+
 
 router.post('/reset-password/:token', async (req, res) => {
   const { token } = req.params;
@@ -1242,48 +1546,37 @@ router.post('/reset-password/:token', async (req, res) => {
       });
     }
 
-    // Find valid reset token
+    // Find valid LOGIN password reset token
     const user = await User.findOne({
-      resetToken: token,
-      resetTokenExpiry: { $gt: Date.now() }
+      loginResetToken: token,
+      loginResetTokenExpiry: { $gt: new Date() }
     });
 
     if (!user) {
       return res.status(400).json({
-        message: 'Invalid or expired password reset link.'
+        message: 'Invalid or expired login password reset link.'
       });
     }
 
-    // Update login password only
+    // Update login password
     user.password = newPassword;
 
-    // Remove token after successful reset
-    user.resetToken = undefined;
-    user.resetTokenExpiry = undefined;
+    // Clear login reset token
+    user.loginResetToken = undefined;
+    user.loginResetTokenExpiry = undefined;
 
     await user.save();
 
-    // Confirmation email
+    // Send confirmation email
     try {
-      const safeName = String(user.name || 'Member').replace(
-        /[&<>"']/g,
-        char => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;'
-        })[char]
-      );
-
       await sendEmail({
         email: user.email,
-        subject: 'Password Changed Successfully | Helping Pools',
+        subject: 'Login Password Changed | Helping Pools',
 
         message: `
 Hello ${user.name || 'Member'},
 
-Your Helping Pools account password has been changed successfully.
+Your Helping Pools login password has been changed successfully.
 
 User ID: ${user.userId}
 
@@ -1295,156 +1588,223 @@ https://helpingpools.online/login
 
         html: `
         <div style="
-          margin:0;
-          padding:35px 12px;
-          background:#f1f8f4;
           font-family:Arial,sans-serif;
+          background:#f1f8f4;
+          padding:30px 12px;
         ">
           <div style="
-            max-width:520px;
+            max-width:500px;
             margin:auto;
             background:#ffffff;
-            border:1px solid #dcebe1;
-            border-radius:18px;
-            overflow:hidden;
-            box-shadow:0 10px 35px rgba(0,60,35,.08);
+            padding:30px;
+            border-radius:15px;
+            text-align:center;
           ">
+            <h2 style="color:#075b42;">
+              Login Password Changed Successfully
+            </h2>
 
-            <div style="
-              padding:28px 20px;
-              text-align:center;
-              background:linear-gradient(120deg,#075b42,#119363);
-            ">
-              <h1 style="
-                margin:0;
-                color:#ffffff;
-                font-size:25px;
-                font-weight:900;
-              ">
-                HELPING <span style="color:#f5d98a;">POOLS</span>
-              </h1>
+            <p>
+              Hello <strong>${user.name || 'Member'}</strong>,
+            </p>
 
-              <p style="
-                color:#d9f2e3;
-                font-size:12px;
-                letter-spacing:2px;
-                font-weight:bold;
-                margin:9px 0 0;
-              ">
-                SECURITY CONFIRMATION
-              </p>
-            </div>
+            <p>
+              Your login password has been successfully updated.
+            </p>
 
-            <div style="padding:32px 25px;text-align:center;">
+            <p>
+              <strong>User ID:</strong> ${user.userId}
+            </p>
 
-              <div style="
-                width:65px;
-                height:65px;
-                line-height:65px;
-                margin:0 auto 20px;
-                border-radius:50%;
-                background:#eaf8ef;
-                color:#08734d;
-                font-size:32px;
-              ">
-                &#10004;
-              </div>
-
-              <h2 style="
-                color:#075b42;
-                font-size:23px;
-                margin:0 0 15px;
-              ">
-                Password Changed Successfully!
-              </h2>
-
-              <p style="color:#52665a;font-size:14px;line-height:1.7;">
-                Hello <strong>${safeName}</strong>,
-              </p>
-
-              <p style="color:#64756a;font-size:14px;line-height:1.7;">
-                Your Helping Pools account password has been
-                successfully updated.
-              </p>
-
-              <div style="
-                padding:16px;
-                margin:22px 0;
-                background:#f1f8f4;
-                border:1px solid #dcebe1;
-                border-radius:12px;
-                text-align:left;
-                color:#426253;
-                font-size:13px;
-                line-height:1.9;
-              ">
-                <strong>Account Details</strong><br/>
-                User ID: <strong>${user.userId}</strong><br/>
-                Password: <strong>Updated successfully</strong>
-              </div>
-
-              <a href="https://helpingpools.online/login" style="
+            <a href="https://helpingpools.online/login"
+              style="
                 display:inline-block;
-                padding:14px 30px;
-                background:linear-gradient(110deg,#075b42,#119363);
+                padding:14px 25px;
+                background:#08734d;
                 color:#ffffff;
                 text-decoration:none;
-                border-radius:10px;
-                font-size:14px;
+                border-radius:8px;
                 font-weight:bold;
               ">
-                LOGIN NOW
-              </a>
+              LOGIN NOW
+            </a>
 
-              <p style="
-                color:#87958b;
-                font-size:12px;
-                line-height:1.6;
-                margin-top:22px;
-              ">
-                If you did not make this change, contact support
-                immediately to secure your account.
-              </p>
-
-            </div>
-
-            <div style="
-              padding:17px;
-              text-align:center;
-              background:#f5f9f6;
-              border-top:1px solid #e5eee7;
-              color:#829187;
-              font-size:11px;
+            <p style="
+              font-size:12px;
+              color:#888;
+              margin-top:25px;
             ">
-              &copy; ${new Date().getFullYear()} Helping Pools.
-              All rights reserved.
-            </div>
-
+              If you did not make this change, contact support immediately.
+            </p>
           </div>
         </div>
         `
       });
-
     } catch (emailError) {
       console.error(
-        'Password confirmation email failed:',
+        'Login password confirmation email failed:',
         emailError.message
       );
     }
 
     return res.json({
-      message: 'Password reset successful.',
+      message: 'Login password reset successful.',
       userId: user.userId
     });
 
   } catch (err) {
-    console.error('Reset password error:', err);
+    console.error('Reset login password error:', err);
 
     return res.status(500).json({
       message: 'Server error. Please try again later.'
     });
   }
 });
+
+
+
+router.post('/reset-transaction-password/:token', async (req, res) => {
+  const { token } = req.params;
+  const { newPassword } = req.body;
+
+  try {
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        message: 'Reset token and new transaction password are required.'
+      });
+    }
+
+    if (
+      typeof newPassword !== 'string' ||
+      newPassword.length < 6
+    ) {
+      return res.status(400).json({
+        message: 'Transaction password must be at least 6 characters long.'
+      });
+    }
+
+    // Find valid TRANSACTION password reset token
+    const user = await User.findOne({
+      transactionResetToken: token,
+      transactionResetTokenExpiry: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: 'Invalid or expired transaction password reset link.'
+      });
+    }
+
+    // Update transaction password only
+    user.transactionPassword = newPassword;
+
+    // Clear transaction reset token
+    user.transactionResetToken = undefined;
+    user.transactionResetTokenExpiry = undefined;
+
+    await user.save();
+
+    // Send confirmation email
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Transaction Password Changed | Helping Pools',
+
+        message: `
+Hello ${user.name || 'Member'},
+
+Your Helping Pools transaction password has been changed successfully.
+
+User ID: ${user.userId}
+
+If you did not make this change, contact support immediately.
+        `,
+
+        html: `
+        <div style="
+          font-family:Arial,sans-serif;
+          background:#f1f8f4;
+          padding:30px 12px;
+        ">
+          <div style="
+            max-width:500px;
+            margin:auto;
+            background:#ffffff;
+            padding:30px;
+            border-radius:15px;
+            text-align:center;
+          ">
+            <h2 style="color:#075b42;">
+              Transaction Password Changed Successfully
+            </h2>
+
+            <p>
+              Hello <strong>${user.name || 'Member'}</strong>,
+            </p>
+
+            <p>
+              Your transaction password has been successfully updated.
+            </p>
+
+            <p>
+              <strong>User ID:</strong> ${user.userId}
+            </p>
+
+            <p style="
+              background:#fff8e6;
+              padding:15px;
+              border-radius:8px;
+              color:#8b6a22;
+            ">
+              Your transaction password is private.
+              Never share it with anyone.
+            </p>
+
+            <a href="https://helpingpools.online/login"
+              style="
+                display:inline-block;
+                padding:14px 25px;
+                background:#08734d;
+                color:#ffffff;
+                text-decoration:none;
+                border-radius:8px;
+                font-weight:bold;
+              ">
+              LOGIN NOW
+            </a>
+
+            <p style="
+              font-size:12px;
+              color:#888;
+              margin-top:25px;
+            ">
+              If you did not make this change, contact support immediately.
+            </p>
+          </div>
+        </div>
+        `
+      });
+    } catch (emailError) {
+      console.error(
+        'Transaction password confirmation email failed:',
+        emailError.message
+      );
+    }
+
+    return res.json({
+      message: 'Transaction password reset successful.',
+      userId: user.userId
+    });
+
+  } catch (err) {
+    console.error('Reset transaction password error:', err);
+
+    return res.status(500).json({
+      message: 'Server error. Please try again later.'
+    });
+  }
+});
+
 
 
 module.exports = router;
