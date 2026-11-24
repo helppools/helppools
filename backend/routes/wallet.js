@@ -1867,7 +1867,8 @@ let directQualificationTime = null;
 
 let directEligibilityHistory =
   await DirectEligibilityHistory.findOne({
-    userId: Number(user.userId)
+    userId: Number(user.userId),
+      packageAmount: Number(packageAmount)
   });
 
 if (
@@ -1924,7 +1925,31 @@ if (
       break;
     }
 
-   if (!timer) {
+  //  if (!timer) {
+  // const startedAt = previousStageEndDate
+  //   ? new Date(previousStageEndDate)
+  //   : new Date(directQualificationTime);
+
+  // const endsAt = getDirectStageEndDate(
+  //   startedAt,
+  //   durationDays
+  // );
+
+  //     timer = await DirectStageTimer.create({
+  //       userId: Number(user.userId),
+  //       packageAmount: Number(packageAmount),
+  //       stageNumber,
+  //       requiredDirects,
+  //       matchingDirects,
+  //       startedAt,
+  //       endsAt,
+  //       completed: false
+  //     });
+  //   }
+
+
+
+if (!timer) {
   const startedAt = previousStageEndDate
     ? new Date(previousStageEndDate)
     : new Date(directQualificationTime);
@@ -1934,17 +1959,46 @@ if (
     durationDays
   );
 
-      timer = await DirectStageTimer.create({
-        userId: Number(user.userId),
-        packageAmount: Number(packageAmount),
-        stageNumber,
-        requiredDirects,
-        matchingDirects,
-        startedAt,
-        endsAt,
-        completed: false
-      });
+  const timerFilter = {
+    userId: Number(user.userId),
+    packageAmount: Number(packageAmount),
+    stageNumber: Number(stageNumber)
+  };
+
+  try {
+    timer = await DirectStageTimer.findOneAndUpdate(
+      timerFilter,
+      {
+        $setOnInsert: {
+          userId: Number(user.userId),
+          packageAmount: Number(packageAmount),
+          stageNumber: Number(stageNumber),
+          requiredDirects,
+          matchingDirects,
+          startedAt,
+          endsAt,
+          completed: false
+        }
+      },
+      {
+        upsert: true,
+        returnDocument: "after",
+        setDefaultsOnInsert: true
+      }
+    );
+
+  } catch (error) {
+    if (error.code !== 11000) {
+      throw error;
     }
+
+    timer = await DirectStageTimer.findOne(timerFilter);
+
+    if (!timer) {
+      throw error;
+    }
+  }
+}
 
     // Purane incorrectly-created timers ko sequential timing ke according correct karo
     // ==========================================
@@ -2104,11 +2158,179 @@ const remainingDirects = Math.max(
 }
 
 
+// async function checkPackageDirectEligibility(user, requiredPackage) {
+//   const userPackage = Number(requiredPackage);
+
+// const requiredDirects =
+//   getPackageRequiredDirects(userPackage);
+
+//   const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
+
+//   if (!PACKAGE_LEVELS.includes(userPackage)) {
+//     return {
+//       allowed: false,
+//       message: "Invalid package selected.",
+//       packageAmount: userPackage,
+//       matchingDirects: 0,
+//       requiredDirects
+//     };
+//   }
+
+//   // User ke direct referrals
+//   const directUsers = await User.find({
+//     sponsorId: user.userId
+//   })
+//     .select("userId topUpAmount packages")
+//     .lean();
+
+//   const directIds = directUsers.map(item => item.userId);
+
+//   // $30 active/completed package wale directs
+//   const subscriptions = directIds.length
+//     ? await PackageSubscription.find({
+//         userId: { $in: directIds },
+//         packageAmount: 30,
+//         status: { $in: ["ACTIVE", "COMPLETED"] }
+//       })
+//         .select("userId packageAmount activatedAt purchasedAt createdAt")
+//         .lean()
+//     : [];
+
+//   const matchingDirectIds = new Set(
+//     subscriptions.map(item => Number(item.userId))
+//   );
+
+//   // Legacy package support
+//   for (const direct of directUsers) {
+//     const legacyAmounts = [
+//       Number(direct.topUpAmount || 0),
+//       ...(Array.isArray(direct.packages)
+//         ? direct.packages.map(item => Number(item.amount || 0))
+//         : [])
+//     ];
+
+//     if (legacyAmounts.includes(30)) {
+//       matchingDirectIds.add(Number(direct.userId));
+//     }
+//   }
+
+//   const matchingDirects = matchingDirectIds.size;
+
+
+//   // ==========================================
+// // ACTUAL SECOND QUALIFIED DIRECT ACTIVATION
+// // ==========================================
+
+// const qualifiedDirectActivationDates = [];
+
+// for (const directId of matchingDirectIds) {
+//   const directSubscriptions = subscriptions.filter(
+//     subscription =>
+//       Number(subscription.userId) === Number(directId)
+//   );
+
+//   const activationDate = directSubscriptions
+//     .map(subscription =>
+//       subscription.activatedAt ||
+//       subscription.purchasedAt ||
+//       subscription.createdAt
+//     )
+//     .filter(Boolean)
+//     .map(date => new Date(date))
+//     .filter(date => !isNaN(date.getTime()))
+//     .sort((a, b) => a - b)[0];
+
+//   if (activationDate) {
+//     qualifiedDirectActivationDates.push(
+//       activationDate
+//     );
+//   }
+// }
+
+// qualifiedDirectActivationDates.sort(
+//   (a, b) => a - b
+// );
+
+// const eligibilityAchievedAt =
+//   qualifiedDirectActivationDates.length >= requiredDirects
+//     ? qualifiedDirectActivationDates[requiredDirects - 1]
+//     : null;
+
+
+//   // 2 qualified directs hone chahiye
+//   if (matchingDirects < requiredDirects) {
+//     return {
+//       allowed: false,
+//       message:
+//   `Your $${userPackage} package requires ${requiredDirects} ` +
+//   `direct referrals with an active $30 package. ` +
+//   `Matching: ${matchingDirects}/${requiredDirects}.`,
+//   packageAmount: userPackage,
+//       directPackage: 30,
+//       matchingDirects,
+//       requiredDirects
+//     };
+//   }
+
+//   // =========================================
+//   // SEPARATE ELIGIBILITY HISTORY TRACKER
+//   // =========================================
+
+//   let history = await DirectEligibilityHistory.findOne({
+//     userId: Number(user.userId),
+//       packageAmount: Number(requiredPackage)
+
+//   });
+
+//   if (!history) {
+//     history = new DirectEligibilityHistory({
+//       userId: Number(user.userId),
+//           packageAmount: userPackage,
+//       requiredDirects,
+//       achieved: false,
+//       achievedAt: null,
+//       qualifyingDirectIds: []
+//     });
+//   }
+
+//   // Qualification complete hone par timestamp save karo.
+//   // Timestamp eligible direct package activation se derive hoga.
+//  // =========================================
+// // SAVE DIRECT ELIGIBILITY ACHIEVEMENT TIME
+// // =========================================
+
+// if (!history.achieved && matchingDirects >= requiredDirects) {
+//   history.achieved = true;
+
+//   // Actual second qualified direct activation time
+//   history.achievedAt =
+//     eligibilityAchievedAt || new Date();
+
+//   history.qualifyingDirectIds = [
+//     ...matchingDirectIds
+//   ].slice(0, requiredDirects);
+
+//   await history.save();
+// }
+
+//   return {
+//     allowed: true,
+//     message: "Package eligibility completed.",
+//     packageAmount: userPackage,
+//     matchingDirects,
+//     requiredDirects,
+//     eligibilityAchieved: history.achieved,
+//     eligibilityAchievedAt: history.achievedAt
+//   };
+// }
+
+
+
 async function checkPackageDirectEligibility(user, requiredPackage) {
   const userPackage = Number(requiredPackage);
 
-const requiredDirects =
-  getPackageRequiredDirects(userPackage);
+  const requiredDirects =
+    getPackageRequiredDirects(userPackage);
 
   const PACKAGE_LEVELS = [30, 60, 120, 240, 480, 960];
 
@@ -2122,23 +2344,33 @@ const requiredDirects =
     };
   }
 
-  // User ke direct referrals
+  // =========================================
+  // 1. GET USER'S DIRECT REFERRALS
+  // =========================================
+
   const directUsers = await User.find({
     sponsorId: user.userId
   })
     .select("userId topUpAmount packages")
     .lean();
 
-  const directIds = directUsers.map(item => item.userId);
+  const directIds = directUsers.map(
+    item => Number(item.userId)
+  );
 
-  // $30 active/completed package wale directs
+  // =========================================
+  // 2. GET QUALIFIED $30 DIRECT SUBSCRIPTIONS
+  // =========================================
+
   const subscriptions = directIds.length
     ? await PackageSubscription.find({
         userId: { $in: directIds },
         packageAmount: 30,
         status: { $in: ["ACTIVE", "COMPLETED"] }
       })
-        .select("userId packageAmount activatedAt purchasedAt createdAt")
+        .select(
+          "userId packageAmount activatedAt purchasedAt createdAt"
+        )
         .lean()
     : [];
 
@@ -2146,12 +2378,17 @@ const requiredDirects =
     subscriptions.map(item => Number(item.userId))
   );
 
-  // Legacy package support
+  // =========================================
+  // 3. LEGACY PACKAGE SUPPORT
+  // =========================================
+
   for (const direct of directUsers) {
     const legacyAmounts = [
       Number(direct.topUpAmount || 0),
       ...(Array.isArray(direct.packages)
-        ? direct.packages.map(item => Number(item.amount || 0))
+        ? direct.packages.map(item =>
+            Number(item.amount || 0)
+          )
         : [])
     ];
 
@@ -2162,56 +2399,63 @@ const requiredDirects =
 
   const matchingDirects = matchingDirectIds.size;
 
+  // =========================================
+  // 4. QUALIFIED DIRECT ACTIVATION DATES
+  // =========================================
 
-  // ==========================================
-// ACTUAL SECOND QUALIFIED DIRECT ACTIVATION
-// ==========================================
+  const qualifiedDirectActivationDates = [];
 
-const qualifiedDirectActivationDates = [];
+  for (const directId of matchingDirectIds) {
+    const directSubscriptions = subscriptions.filter(
+      subscription =>
+        Number(subscription.userId) === Number(directId)
+    );
 
-for (const directId of matchingDirectIds) {
-  const directSubscriptions = subscriptions.filter(
-    subscription =>
-      Number(subscription.userId) === Number(directId)
+    const activationDate = directSubscriptions
+      .map(subscription =>
+        subscription.activatedAt ||
+        subscription.purchasedAt ||
+        subscription.createdAt
+      )
+      .filter(Boolean)
+      .map(date => new Date(date))
+      .filter(date => !isNaN(date.getTime()))
+      .sort((a, b) => a - b)[0];
+
+    if (activationDate) {
+      qualifiedDirectActivationDates.push({
+        userId: Number(directId),
+        activatedAt: activationDate
+      });
+    }
+  }
+
+  qualifiedDirectActivationDates.sort(
+    (a, b) => a.activatedAt - b.activatedAt
   );
 
-  const activationDate = directSubscriptions
-    .map(subscription =>
-      subscription.activatedAt ||
-      subscription.purchasedAt ||
-      subscription.createdAt
-    )
-    .filter(Boolean)
-    .map(date => new Date(date))
-    .filter(date => !isNaN(date.getTime()))
-    .sort((a, b) => a - b)[0];
+  const eligibilityAchievedAt =
+    qualifiedDirectActivationDates.length >= requiredDirects
+      ? qualifiedDirectActivationDates[requiredDirects - 1].activatedAt
+      : null;
 
-  if (activationDate) {
-    qualifiedDirectActivationDates.push(
-      activationDate
-    );
-  }
-}
+  const qualifyingDirectIds =
+    qualifiedDirectActivationDates
+      .slice(0, requiredDirects)
+      .map(item => item.userId);
 
-qualifiedDirectActivationDates.sort(
-  (a, b) => a - b
-);
+  // =========================================
+  // 5. CHECK REQUIRED DIRECTS
+  // =========================================
 
-const eligibilityAchievedAt =
-  qualifiedDirectActivationDates.length >= requiredDirects
-    ? qualifiedDirectActivationDates[requiredDirects - 1]
-    : null;
-
-
-  // 2 qualified directs hone chahiye
   if (matchingDirects < requiredDirects) {
     return {
       allowed: false,
       message:
-  `Your $${userPackage} package requires ${requiredDirects} ` +
-  `direct referrals with an active $30 package. ` +
-  `Matching: ${matchingDirects}/${requiredDirects}.`,
-  packageAmount: userPackage,
+        `Your $${userPackage} package requires ${requiredDirects} ` +
+        `direct referrals with an active $30 package. ` +
+        `Matching: ${matchingDirects}/${requiredDirects}.`,
+      packageAmount: userPackage,
       directPackage: 30,
       matchingDirects,
       requiredDirects
@@ -2219,42 +2463,92 @@ const eligibilityAchievedAt =
   }
 
   // =========================================
-  // SEPARATE ELIGIBILITY HISTORY TRACKER
+  // 6. PACKAGE-WISE HISTORY FILTER
   // =========================================
 
-  let history = await DirectEligibilityHistory.findOne({
-    userId: Number(user.userId)
-  });
+  const historyFilter = {
+    userId: Number(user.userId),
+    packageAmount: userPackage
+  };
 
-  if (!history) {
-    history = new DirectEligibilityHistory({
-      userId: Number(user.userId),
-      requiredDirects,
-      achieved: false,
-      achievedAt: null,
-      qualifyingDirectIds: []
-    });
+  let history;
+
+  // =========================================
+  // 7. ATOMIC HISTORY CREATION
+  // =========================================
+
+  try {
+    history = await DirectEligibilityHistory.findOneAndUpdate(
+      historyFilter,
+      {
+        $setOnInsert: {
+          userId: Number(user.userId),
+          packageAmount: userPackage,
+          requiredDirects,
+          achieved: false,
+          achievedAt: null,
+          qualifyingDirectIds: [],
+          source: "package_subscription"
+        }
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true
+      }
+    );
+
+  } catch (error) {
+    // Another simultaneous request may have created this record.
+    if (error.code !== 11000) {
+      throw error;
+    }
+
+    history = await DirectEligibilityHistory.findOne(
+      historyFilter
+    );
+
+    if (!history) {
+      throw error;
+    }
   }
 
-  // Qualification complete hone par timestamp save karo.
-  // Timestamp eligible direct package activation se derive hoga.
- // =========================================
-// SAVE DIRECT ELIGIBILITY ACHIEVEMENT TIME
-// =========================================
+  // =========================================
+  // 8. SAVE QUALIFICATION ONLY ONCE
+  // =========================================
 
-if (!history.achieved && matchingDirects >= requiredDirects) {
-  history.achieved = true;
+  if (!history.achieved && matchingDirects >= requiredDirects) {
 
-  // Actual second qualified direct activation time
-  history.achievedAt =
-    eligibilityAchievedAt || new Date();
+    const achievementTime =
+      eligibilityAchievedAt || new Date();
 
-  history.qualifyingDirectIds = [
-    ...matchingDirectIds
-  ].slice(0, requiredDirects);
+    await DirectEligibilityHistory.updateOne(
+      {
+        ...historyFilter,
+        achieved: { $ne: true }
+      },
+      {
+        $set: {
+          achieved: true,
+          achievedAt: achievementTime,
+          qualifyingDirectIds:
+            qualifyingDirectIds.length >= requiredDirects
+              ? qualifyingDirectIds
+              : [...matchingDirectIds].slice(0, requiredDirects),
+          requiredDirects
+        }
+      }
+    );
 
-  await history.save();
-}
+    // Get the latest saved history
+    history = await DirectEligibilityHistory.findOne(
+      historyFilter
+    );
+  }
+
+  // =========================================
+  // 9. FINAL RESPONSE
+  // =========================================
 
   return {
     allowed: true,
@@ -2262,8 +2556,8 @@ if (!history.achieved && matchingDirects >= requiredDirects) {
     packageAmount: userPackage,
     matchingDirects,
     requiredDirects,
-    eligibilityAchieved: history.achieved,
-    eligibilityAchievedAt: history.achievedAt
+    eligibilityAchieved: Boolean(history?.achieved),
+    eligibilityAchievedAt: history?.achievedAt || null
   };
 }
 
