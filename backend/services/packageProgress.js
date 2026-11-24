@@ -1201,7 +1201,8 @@ async function creditStageEarning(subscription, stage) {
         }
       },
       {
-        new: true,
+        // new: true,
+  returnDocument: "after",
         runValidators: true
       }
     );
