@@ -2491,11 +2491,11 @@ async function checkPackageDirectEligibility(user, requiredPackage) {
           source: "package_subscription"
         }
       },
-      {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true
-      }
+     {
+  upsert: true,
+  returnDocument: "after",
+  setDefaultsOnInsert: true
+}
     );
 
   } catch (error) {
