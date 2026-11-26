@@ -11060,68 +11060,7 @@ export default function Plan() {
         }
       `}</style>
 
-      {/* Header */}
-      {/* <div className="hp-plan-header">
-        <div className="hp-plan-heading">
-          <div className="hp-plan-heading-icon">
-            <Package size={23} />
-          </div>
-
-          <div>
-            <h2>
-              PACKAGE <span>PROGRESS</span>
-            </h2>
-            <p>Helping Pools • Package Activity Tracker</p>
-          </div>
-        </div>
-
-        <div className="hp-plan-tag">
-          <Sparkles size={12} />
-          LIVE STATUS
-        </div>
-      </div> */}
-
-      {/* Overall summary */}
-      {/* <div className="hp-summary">
-        <div className="hp-summary-card">
-          <div className="hp-summary-icon">
-            <Package size={18} />
-          </div>
-
-          <div>
-            <div className="hp-summary-label">Purchased Cycles</div>
-            <div className="hp-summary-value">
-              {subscriptions.length}
-            </div>
-          </div>
-        </div>
-
-        <div className="hp-summary-card">
-          <div className="hp-summary-icon">
-            <CheckCircle2 size={18} />
-          </div>
-
-          <div>
-            <div className="hp-summary-label">Completed Stages</div>
-            <div className="hp-summary-value">
-              {totalCompletedStages}
-            </div>
-          </div>
-        </div>
-
-        <div className="hp-summary-card">
-          <div className="hp-summary-icon">
-            <Clock3 size={18} />
-          </div>
-
-          <div>
-            <div className="hp-summary-label">Remaining Stages</div>
-            <div className="hp-summary-value">
-              {totalRemainingStages}
-            </div>
-          </div>
-        </div>
-      </div> */}
+      
 
       {/* Refresh */}
       <div className="hp-refresh-row">
@@ -11273,74 +11212,7 @@ export default function Plan() {
                               {statusLabel(subscription.status)}
                             </div>
 
-                            {/* <div className="hp-package-meta">
-                              <div className="hp-meta-item">
-                                <small>Package Amount</small>
-                                <strong>{money(packageAmount)}</strong>
-                              </div>
-
-                              <div className="hp-meta-item">
-                                <small>Completed Stages</small>
-                                <strong>{completed} / 14</strong>
-                              </div>
-
-                              <div className="hp-meta-item">
-                                <small>Remaining Stages</small>
-                                <strong>{remaining} / 14</strong>
-                              </div>
-
-                              <div className="hp-meta-item">
-                                <small>Current Stage</small>
-                                <strong>
-                                  {subscription.status === "COMPLETED"
-                                    ? "All completed"
-                                    : `Stage ${currentStageNumber} / 14`}
-                                </strong>
-                              </div>
-
-                              <div className="hp-meta-item">
-                                <small>Current Stage Status</small>
-                                <strong>
-                                  {statusLabel(
-                                    currentStage?.status || "LOCKED"
-                                  )}
-                                </strong>
-                              </div>
-
-                              <div className="hp-meta-item">
-                                <small>Timer Remaining</small>
-                                <strong>
-                                  {currentStage?.status === "RUNNING"
-                                    ? getRemainingTime(
-                                        currentStage.endsAt,
-                                        now
-                                      )
-                                    : currentStage?.status === "PAUSED"
-                                    ? "Timer paused"
-                                    : currentStage?.status === "ACHIEVED"
-                                    ? "Stage completed"
-                                    : "Not running"}
-                                </strong>
-                              </div>
-
-                              <div className="hp-meta-item">
-                                <small>Purchased At</small>
-                                <strong>
-                                  {subscription.purchasedAt
-                                    ? new Date(
-                                        subscription.purchasedAt
-                                      ).toLocaleString()
-                                    : "Not available"}
-                                </strong>
-                              </div>
-
-                              <div className="hp-meta-item">
-                                <small>Cycle Status</small>
-                                <strong>
-                                  {statusLabel(subscription.status)}
-                                </strong>
-                              </div>
-                            </div> */}
+                             
 
                             <div className="hp-table-scroll">
                               <table className="hp-package-table">
@@ -11349,7 +11221,7 @@ export default function Plan() {
                                     <th>Stage</th>
                                     <th>Duration / Days</th>
                                     <th>Stage Status</th>
-                                    <th>Timer / Remaining Time</th>
+                                    {/* <th>Timer / Remaining Time</th> */}
                                     <th>Reference Amount</th>
                                     <th>Achieved?</th>
                                   </tr>
@@ -11424,7 +11296,7 @@ export default function Plan() {
                                           </span>
                                         </td>
 
-                                        <td className="hp-timer-cell">
+                                        {/* <td className="hp-timer-cell">
                                           <Clock3
                                             size={12}
                                             style={{
@@ -11434,7 +11306,7 @@ export default function Plan() {
                                             }}
                                           />
                                           {timer}
-                                        </td>
+                                        </td> */}
 
                                         <td className="hp-reference-amount">
                                           {money(
