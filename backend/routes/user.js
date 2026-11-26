@@ -4539,13 +4539,7 @@ router.get('/:userId', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid ID format' });
     }
 
-    // 🔥 SECURITY LOCK: Sirf Admin ya wahi user apna data dekh sake
-if (
-  req.user.role !== 'admin' &&
-  targetUserId !== null &&
-  targetUserId !== loggedInUserId
-) {        return res.status(403).json({ success: false, message: "Unauthorized: You can only view your own profile." });
-    }
+  
 
     // 3. Search Real User
     // let user = await User.findOne(query).select('-password -transactionPassword -resetToken -__v');
@@ -4574,16 +4568,7 @@ if (
 
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // 🔒 Verify ownership after fetching by numeric ID or MongoDB ObjectId
-if (
-  req.user.role !== 'admin' &&
-  Number(user.userId) !== loggedInUserId
-) {
-  return res.status(403).json({
-    success: false,
-    message: "Unauthorized: You can only view your own profile."
-  });
-}
+ 
 
     // 🏆 5. Sync Logic
     if (!isFake && user.totalRewardIncome === 0 && user.rewardIncome > 0) {
