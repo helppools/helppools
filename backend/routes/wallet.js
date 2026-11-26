@@ -170,22 +170,56 @@ const getLevelUnlockData = (pkg, level, packages) => {
  
  
 // 🧾 GET /wallet/deposit-history/:userId
-router.get('/deposit-history/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const numericUserId = Number(userId);
+// router.get('/deposit-history/:userId', async (req, res) => {
+//   router.get('/deposit-history/:userId', authMiddleware, async (req, res) => {
+//   try {
 
-    if (isNaN(numericUserId)) {
+//     if (Number(req.user.userId) !== numericUserId &&
+//     String(req.user.role).toLowerCase() !== "admin") {
+//   return res.status(403).json({ message: "Access denied." });
+// }
+//     const { userId } = req.params;
+//     const numericUserId = Number(userId);
+
+//     if (isNaN(numericUserId)) {
+//       return res.status(400).json({ message: 'Invalid user ID' });
+//     }
+
+//     const deposits = await Deposit.find({ userId: numericUserId }).sort({ createdAt: -1 });
+//     res.json(deposits); // ✅ Backend directly array return kar raha hai []
+//   } catch (err) {
+//     console.error('Error fetching deposit history:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
+
+
+router.get('/deposit-history/:userId', authMiddleware, async (req, res) => {
+  try {
+    const numericUserId = Number(req.params.userId);
+
+    if (!Number.isSafeInteger(numericUserId) || numericUserId <= 0) {
       return res.status(400).json({ message: 'Invalid user ID' });
     }
 
-    const deposits = await Deposit.find({ userId: numericUserId }).sort({ createdAt: -1 });
-    res.json(deposits); // ✅ Backend directly array return kar raha hai []
+    if (
+      Number(req.user.userId) !== numericUserId &&
+      String(req.user.role).toLowerCase() !== "admin"
+    ) {
+      return res.status(403).json({ message: "Access denied." });
+    }
+
+    const deposits = await Deposit.find({
+      userId: numericUserId
+    }).sort({ createdAt: -1 });
+
+    return res.json(deposits);
   } catch (err) {
     console.error('Error fetching deposit history:', err);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 
 // 🔹 Wallet Transfer
@@ -3424,9 +3458,20 @@ router.post("/promo-withdraw", authMiddleware, async (req, res) => {
 
 
 // 🔹 GET specific withdrawal history for a user
-router.get('/withdrawals/:userId', async (req, res) => {
+router.get('/withdrawals/:userId', authMiddleware, async (req, res) => {
   try {
     const userId = Number(req.params.userId);
+
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+  return res.status(400).json({ message: "Invalid user ID." });
+}
+
+if (
+  Number(req.user.userId) !== userId &&
+  String(req.user.role).toLowerCase() !== "admin"
+) {
+  return res.status(403).json({ message: "Access denied." });
+}
     // Withdrawal model se data fetch karega
     const withdrawals = await Withdrawal.find({ userId }).sort({ date: -1 });
     
@@ -3534,10 +3579,27 @@ router.get('/withdrawals/:userId', async (req, res) => {
 
 
  
-router.get('/history/:userId', async (req, res) => {
+router.get('/history/:userId', authMiddleware, async (req, res) => {
   try {
     const rawUserId = req.params.userId;
     const userIdNum = Number(rawUserId);
+    if (!Number.isSafeInteger(userIdNum) || userIdNum <= 0) {
+  return res.status(400).json({
+    success: false,
+    history: [],
+    balances: null
+  });
+}
+
+if (
+  Number(req.user.userId) !== userIdNum &&
+  String(req.user.role).toLowerCase() !== "admin"
+) {
+  return res.status(403).json({
+    success: false,
+    message: "Access denied."
+  });
+}
 
     // Agar ID galat hai, toh safe format mein khali array bhejo taaki frontend crash na ho
     if (isNaN(userIdNum)) {
@@ -3640,9 +3702,21 @@ router.get('/history/:userId', async (req, res) => {
 // ... (Aapka pehle ka code) ...
 
 // 🟢 NAYA ROUTE YAHAN PASTE KARO 👇
-router.get('/my-level-team/:userId', async (req, res) => {
+router.get('/my-level-team/:userId', authMiddleware, async (req, res) => {
     try {
-        const { userId } = req.params;
+const userId = Number(req.params.userId);
+
+if (!Number.isSafeInteger(userId) || userId <= 0) {
+  return res.status(400).json({ message: "Invalid user ID." });
+}
+
+if (
+  Number(req.user.userId) !== userId &&
+  String(req.user.role).toLowerCase() !== "admin"
+) {
+  return res.status(403).json({ message: "Access denied." });
+}
+        
         
         // Saare users nikal lo sirf zaroori fields ke sath
         const allUsers = await User.find({}, 'userId sponsorId isToppedUp').lean();
@@ -3690,10 +3764,19 @@ router.get('/my-level-team/:userId', async (req, res) => {
  
 // GET /api/wallet/topup-history/:userId
 // GET /api/wallet/topup-history/:userId
-router.get("/topup-history/:userId", async (req, res) => {
+router.get("/topup-history/:userId", authMiddleware, async (req, res) => {
   try {
     const userId = Number(req.params.userId); // ensure numeric
+if (!Number.isSafeInteger(userId) || userId <= 0) {
+  return res.status(400).json({ message: "Invalid user ID." });
+}
 
+if (
+  Number(req.user.userId) !== userId &&
+  String(req.user.role).toLowerCase() !== "admin"
+) {
+  return res.status(403).json({ message: "Access denied." });
+}
     // 🔥 SUPER SCANNER: Yeh har top-up transaction ko dhoondh nikalega
     const topups = await Transaction.find({ 
       $and: [
@@ -4111,7 +4194,8 @@ router.get("/:userId", authMiddleware, async (req, res) => {
 
     // 2. USER VALIDATION
     const user = await User.findOne({ userId })
-      .select("-password -txnPassword -__v");
+      // .select("-password -txnPassword -__v");
+      .select("-password -transactionPassword -txnPassword -resetToken -__v");
 
     if (!user) {
       return res.status(404).json({

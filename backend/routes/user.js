@@ -36,9 +36,6 @@ const transporter = nodemailer.createTransport({
 // Controllers ko import kiya
 const {
   getUserById,
-  blockUser,
-  unblockUser,
-  getAllUsers,
   getSponsorName // 👈 Ye add kiya hai naye logic ke liye
 } = require('../controllers/userController');
 
@@ -122,25 +119,17 @@ const processGlobalTeamGrowth = async (excludeUserId) => {
 
 
 
-
-
-
-// 📋 Get all users (Admin ke liye)
-router.get('/all', getAllUsers);
+ 
 
 // 👤 Get Sponsor Name (Register page par verification ke liye)
 router.get('/sponsor/:id', getSponsorName);
 
-// 🔒 Block user (Admin)
-router.put('/block/:id', blockUser);
-
-// 🔓 Unblock user (Admin)
-router.put('/unblock/:id', unblockUser);
+ 
 
  
-// 🔍 Get User By ID (Dashboard data, real + fake count yahan se jayega)
-// ⚠️ ISE SABSE NEECHE HI RAKHNA HAI
-router.get('/:userId', authMiddleware, getUserById); // Ye to sabse pehle hona chahiye
+// // 🔍 Get User By ID (Dashboard data, real + fake count yahan se jayega)
+// // ⚠️ ISE SABSE NEECHE HI RAKHNA HAI
+// router.get('/:userId', authMiddleware, getUserById); // Ye to sabse pehle hona chahiye
 // 
 // // ---------------------------
 // Helper: Check if target is in downline
@@ -165,7 +154,11 @@ const isUserInDownline = async (rootUserId, targetUserId) => {
 
 // ---------------------------
 // Referral Tree
-router.get('/tree/:userId', async (req, res) => {
+// router.get('/tree/:userId', async (req, res) => {
+  router.get('/tree/:userId', authMiddleware, async (req, res) => {
+    if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: 'Access denied' });
+}
   try {
     const userId = Number(req.params.userId);
     const user = await User.findOne({ userId });
@@ -225,12 +218,7 @@ router.get('/system-settings', async (req, res) => {
     }
 });
 
-// 2. Dynamic route ko neeche rakhein
-// Express yahan tabhi aayega agar path 'system-settings' nahi hoga
-router.get('/:userId', getUserById); 
-
-
-
+ 
 
 
 
@@ -428,8 +416,18 @@ router.put('/update-profile-secure', authMiddleware, async (req, res) => {
         
         await user.save();
 
-        res.json({ success: true, message: "Profile updated successfully!", user });
-    } catch (error) {
+res.json({
+  success: true,
+  message: "Profile updated successfully!",
+  user: {
+    userId: user.userId,
+    name: user.name,
+    email: user.email,
+    mobile: user.mobile,
+    walletAddress: user.walletAddress,
+    walletAddressChangeCount: user.walletAddressChangeCount
+  }
+});    } catch (error) {
         console.error("Profile Update Error:", error);
         res.status(500).json({ success: false, message: "Profile update failed. Check backend console." });
     }
@@ -440,115 +438,12 @@ router.put('/update-profile-secure', authMiddleware, async (req, res) => {
 // ---------------------------
 // 1. UPDATED (SUPER FAST): Direct Team Route
 // ---------------------------
+ 
 // router.get('/direct-team/:userId', async (req, res) => {
-//   try {
-//     const currentUserId = Number(req.params.userId);
-
-//     // 🔥 1. Ek hi baar me saare users RAM mein load karenge (Superfast Breakaway ke liye)
-//     const allUsers = await User.find({}, 'userId sponsorId name mobile country topUpAmount createdAt role').lean();
-
-//     // 👑 🔥 NAYA FIX: CURRENT USER KA ROLE CHECK KARO (Super Leader Bypass ke liye)
-//     const currentUserData = allUsers.find(u => u.userId === currentUserId);
-//     const isSuperLeader = currentUserData && currentUserData.role === 'superleader';
-
-//     // 2. RAM mein Network Tree (Map) banayenge
-//     const directMap = new Map();
-//     const userDetailsMap = new Map();
-
-//     for (let u of allUsers) {
-//         userDetailsMap.set(u.userId, u);
-//         if (u.sponsorId) {
-//             if (!directMap.has(u.sponsorId)) {
-//                 directMap.set(u.sponsorId, []);
-//             }
-//             directMap.get(u.sponsorId).push(u);
-//         }
-//     }
-
-//     // 🔥 3. MAIN USER KI TOTAL TEAM NIKALNA (With Breakaway Rule) 🔥
-//     let mainUserTotalTeam = 0;
-//     let mainQueue = [...(directMap.get(currentUserId) || [])];
-
-//     while (mainQueue.length > 0) {
-//         const currentNode = mainQueue.shift();
-//         mainUserTotalTeam++; // Ek user count ho gaya
-
-//         // 🛑 ABSOLUTE BREAKAWAY WALL (WITH SUPER LEADER BYPASS) 🛑
-//         // Agar banda 'leader' hai aur check karne wala 'superleader' NAHI hai, tabhi roko.
-//         if (currentNode.role === 'leader' && !isSuperLeader) {
-//             continue; 
-//         }
-
-//         // Agar leader nahi hai ya Super Leader bypass hai, toh iski team aage queue mein add karo
-//         const children = directMap.get(currentNode.userId) || [];
-//         for (let child of children) {
-//             mainQueue.push(child);
-//         }
-//     }
-
-//     // 🔥 4. TABLE KE LIYE DIRECTS KA DATA BANANA 🔥
-//     const myDirects = directMap.get(currentUserId) || [];
-    
-//     const teamWithStats = myDirects.map((direct, index) => {
-//         const membersDirects = directMap.get(direct.userId) || [];
-//         const directCount = membersDirects.length;
-
-//         let teamSize = 0;
-
-//         // 🛑 Agar Direct member Leader hai aur user normal hai, toh uski team 0 bhejenge
-//         if (direct.role === 'leader' && !isSuperLeader) {
-//             teamSize = 0; 
-//         } else {
-//             // Agar bypass allowed hai, toh uski team size calculate karenge
-//             let subQueue = [...membersDirects];
-//             while (subQueue.length > 0) {
-//                 const subNode = subQueue.shift();
-//                 teamSize++;
-
-//                 // 🛑 Is sub-team ke andar bhi Breakaway check karenge (WITH BYPASS)
-//                 if (subNode.role === 'leader' && !isSuperLeader) {
-//                     continue; 
-//                 }
-//                 const subChildren = directMap.get(subNode.userId) || [];
-//                 for (let child of subChildren) {
-//                     subQueue.push(child);
-//                 }
-//             }
-//         }
-
-//         return {
-//             srNo: index + 1,
-//             userId: direct.userId,
-//             name: direct.name,
-//             mobile: direct.mobile,
-//             country: direct.country,
-//             role: direct.role, 
-//             topUpAmount: direct.topUpAmount,
-//             createdAt: direct.createdAt,
-//             totalDirects: directCount,
-//             totalTeam: teamSize,
-//             // 🔥 NAYA FIX: Frontend ko same naam se data bhejo jo database mein hai
-//             globalTeamCount: teamSize, 
-//             directCount: directCount
-//         };
-//     });
-
-//     // Naye directs sabse upar dikhane ke liye sort (Descending order of date)
-//     teamWithStats.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-//     // Response Bhejenge
-//     res.json({
-//       team: teamWithStats,      
-//       totalTeam: mainUserTotalTeam 
-//     });
-
-//   } catch (err) {
-//     console.error("Error in direct-team API:", err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// });
-
-router.get('/direct-team/:userId', async (req, res) => {
+  router.get('/direct-team/:userId', authMiddleware, async (req, res) => {
+    if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: 'Access denied' });
+}
   try {
     const currentUserId = Number(req.params.userId);
 
@@ -775,8 +670,11 @@ router.get('/direct-team/:userId', async (req, res) => {
 //   }
 // });
 
-router.get('/all-team/:userId', async (req, res) => {
-  try {
+router.get('/all-team/:userId', authMiddleware, async (req, res) => {
+    try {
+      if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: 'Access denied' });
+}
     const currentUserId = Number(req.params.userId);
 
     // 🔥 1. Ek hi baar me saare users RAM mein load karenge (Superfast + Role Checking)
@@ -865,8 +763,12 @@ router.get('/all-team/:userId', async (req, res) => {
 
 // ---------------------------
 // Wallet History
-router.get('/wallet-history/:userId', async (req, res) => {
+// router.get('/wallet-history/:userId', async (req, res) => {
+  router.get('/wallet-history/:userId', authMiddleware, async (req, res) => {
   try {
+    if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: 'Access denied' });
+}
     const txs = await Transaction.find({
       userId: Number(req.params.userId),
       type: { $in: ['topup', 'deposit', 'transfer'] }
@@ -890,8 +792,12 @@ router.get('/wallet-history/:userId', async (req, res) => {
 // GET USER POOL STATUS
 // GET USER POOL STATUS (Formatted for Frontend)
 // GET USER POOL STATUS
-router.get('/pool-status/:userId', async (req, res) => {
+// router.get('/pool-status/:userId', async (req, res) => {
+  router.get('/pool-status/:userId', authMiddleware, async (req, res) => {
   try {
+    if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: 'Access denied' });
+}
     const user = await User.findOne({ userId: req.params.userId }).select('activePools').lean();
     if (!user) return res.status(404).json({ message: "User not found" });
     
@@ -916,31 +822,7 @@ router.get('/pool-status/:userId', async (req, res) => {
 });
 
 // ✅ PROMO USER DEDICATED ROUTE
-
-// 🔥 ADMIN ROUTE: Purane Missed Rewards Dilane Ke Liye (Bas Ek Baar Chalana Hai)
-router.get('/fix-missed-rewards', async (req, res) => {
-    try {
-        console.log("Fixing missed rewards started...");
-        // Un sabhi users ko nikalenge jinka topup 30 ya usse zyada hai
-        const eligibleUsers = await User.find({ topUpAmount: { $gte: 30 } });
-        let count = 0;
-
-        for (let user of eligibleUsers) {
-            // Ye function automatically check karega aur agar condition puri hogi toh reward de dega
-            await checkAndAwardManagerReward(user.userId);
-            count++;
-        }
-
-        console.log(`✅ Missed rewards distribution complete for ${count} users.`);
-        res.json({ 
-            success: true, 
-            message: `Done! Checked ${count} users and distributed all missing rewards.` 
-        });
-    } catch (err) {
-        console.error("Error fixing rewards:", err);
-        res.status(500).json({ message: "Server error" });
-    }
-});
+ 
 
 
 
@@ -965,8 +847,11 @@ const REWARD_MILESTONES = [
 const rewardCache = new Map();
 const CACHE_TTL = 15 * 60 * 1000; 
 
-router.get('/monthly-reward-stats/:userId', async (req, res) => {
-    try {
+router.get('/monthly-reward-stats/:userId', authMiddleware, async (req, res) => {
+      try {
+        if (Number(req.params.userId) !== Number(req.user.userId)) {
+    return res.status(403).json({ message: 'Access denied' });
+}
         const userId = Number(req.params.userId); 
         
         // 🚀 CACHE CHECK
@@ -4163,8 +4048,11 @@ router.post('/promo-dummy-topup', authMiddleware, async (req, res) => {
 
 
  // Downline Team Business Details
-router.get("/binary-summary/:userId", async (req, res) => {  
-  try {
+router.get("/binary-summary/:userId", authMiddleware, async (req, res) => {
+    try {
+      if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: "Access denied" });
+}
     const user = await User.findOne({ userId: Number(req.params.userId) });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -4199,8 +4087,12 @@ router.get("/binary-summary/:userId", async (req, res) => {
 
 
 
-router.get('/global-team-count/:userId', async (req, res) => {
+// router.get('/global-team-count/:userId', async (req, res) => {
+  router.get('/global-team-count/:userId', authMiddleware, async (req, res) => {
   try {
+    if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: 'Access denied' });
+}
     // System me total users
     const users = await User.find({}, { userId: 1, _id: 0 }).lean();
     const count = users.length;
@@ -4217,7 +4109,10 @@ router.get('/global-team-count/:userId', async (req, res) => {
 router.get("/profile", authMiddleware, async (req, res) => {
   try {
     // User ko fetch karo
-    const user = await User.findOne({ userId: req.user.userId }).lean();
+    // const user = await User.findOne({ userId: req.user.userId }).lean();
+    const user = await User.findOne({ userId: req.user.userId })
+  .select('-password -transactionPassword -resetToken -editProfileOtp -editProfileOtpExpiry -profileEditAccessExpiry -__v')
+  .lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // =========================================================
@@ -4268,8 +4163,11 @@ router.get("/profile", authMiddleware, async (req, res) => {
 
 // GET Downline Business
 // 🚀 UPDATED (SUPER FAST): Downline Business Route
-router.get("/downline-business/:userId", async (req, res) => {
-  try {
+router.get("/downline-business/:userId", authMiddleware, async (req, res) => {
+    try {
+      if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: "Access denied" });
+}
     const userId = Number(req.params.userId);
 
     // 1. Find main user
@@ -4404,8 +4302,7 @@ router.get("/downline-business/:userId", async (req, res) => {
 
 
 
-// 🔥 ADMIN ROUTE: Purane Missed Rewards Dilane Ke Liye (Bas Ek Baar Chalana Hai)
- 
+  
 
 
 // routes/user.js
@@ -4529,8 +4426,11 @@ router.get('/sponsor-name/:id', async (req, res) => {
 // ==========================================
 // ✅ FAST: GET REWARD PROGRESS STATS API
 // ==========================================
-router.get('/reward-stats/:userId', async (req, res) => {
-  try {
+router.get('/reward-stats/:userId', authMiddleware, async (req, res) => {
+    try {
+      if (Number(req.params.userId) !== Number(req.user.userId)) {
+  return res.status(403).json({ message: "Access denied" });
+}
     const userId = Number(req.params.userId);
     const user = await User.findOne({ userId });
     
@@ -4640,12 +4540,18 @@ router.get('/:userId', authMiddleware, async (req, res) => {
     }
 
     // 🔥 SECURITY LOCK: Sirf Admin ya wahi user apna data dekh sake
-    if (req.user.role !== 'admin' && targetUserId && targetUserId !== loggedInUserId) {
-        return res.status(403).json({ success: false, message: "Unauthorized: You can only view your own profile." });
+if (
+  req.user.role !== 'admin' &&
+  targetUserId !== null &&
+  targetUserId !== loggedInUserId
+) {        return res.status(403).json({ success: false, message: "Unauthorized: You can only view your own profile." });
     }
 
     // 3. Search Real User
-    let user = await User.findOne(query).select('-password -transactionPassword -resetToken -__v');
+    // let user = await User.findOne(query).select('-password -transactionPassword -resetToken -__v');
+   let user = await User.findOne(query).select(
+  '-password -transactionPassword -resetToken -editProfileOtp -editProfileOtpExpiry -profileEditAccessExpiry -__v'
+);
     let isFake = false;
     
     // 🔥 4. Search Fake User if Real not found
@@ -4667,6 +4573,17 @@ router.get('/:userId', authMiddleware, async (req, res) => {
     }
 
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // 🔒 Verify ownership after fetching by numeric ID or MongoDB ObjectId
+if (
+  req.user.role !== 'admin' &&
+  Number(user.userId) !== loggedInUserId
+) {
+  return res.status(403).json({
+    success: false,
+    message: "Unauthorized: You can only view your own profile."
+  });
+}
 
     // 🏆 5. Sync Logic
     if (!isFake && user.totalRewardIncome === 0 && user.rewardIncome > 0) {
@@ -4796,7 +4713,19 @@ router.put('/:userId', authMiddleware, async (req, res) => {
     if (mobile) user.mobile = mobile;
 
     await user.save();
-    res.json({ success: true, message: 'Profile updated successfully', user: user });
+    // res.json({ success: true, message: 'Profile updated successfully', user: user });
+    res.json({
+  success: true,
+  message: 'Profile updated successfully',
+  user: {
+    userId: user.userId,
+    name: user.name,
+    email: user.email,
+    mobile: user.mobile,
+    walletAddress: user.walletAddress,
+    walletAddressChangeCount: user.walletAddressChangeCount
+  }
+});
   } catch (err) {
     console.error('Profile Update Error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -4854,6 +4783,9 @@ router.put('/change-password/:userId', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Get User By ID — always keep this route at the bottom
+// router.get('/:userId', authMiddleware, getUserById);
  
 
 // Ye aapki file ki sabse aakhiri line honi chahiye 👇
