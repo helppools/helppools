@@ -11373,9 +11373,9 @@ export default function Plan() {
                             <thead>
                               <tr>
                                 <th>Stage</th>
-                                <th>Duration / Days</th>
+                                {/* <th>Duration / Days</th> */}
                                 <th>Stage Status</th>
-                                <th>Timer / Remaining Time</th>
+                                {/* <th>Timer / Remaining Time</th> */}
                                 <th>Reference Amount</th>
                                 <th>Achieved?</th>
                               </tr>
@@ -11392,9 +11392,9 @@ export default function Plan() {
                                     </span>
                                   </td>
 
-                                  <td className="hp-duration-cell">
+                                  {/* <td className="hp-duration-cell">
                                     {days} {days === 1 ? "Day" : "Days"}
-                                  </td>
+                                  </td> */}
 
                                   <td>
                                     <span className="hp-status gray">
@@ -11402,9 +11402,9 @@ export default function Plan() {
                                     </span>
                                   </td>
 
-                                  <td className="hp-timer-cell">
+                                  {/* <td className="hp-timer-cell">
                                     Not purchased
-                                  </td>
+                                  </td> */}
 
                                   <td className="hp-reference-amount">
                                     {money(
