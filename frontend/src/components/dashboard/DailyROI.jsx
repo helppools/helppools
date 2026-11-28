@@ -11219,7 +11219,7 @@ export default function Plan() {
                                 <thead>
                                   <tr>
                                     <th>Stage</th>
-                                    <th>Duration / Days</th>
+                                    {/* <th>Duration / Days</th> */}
                                     <th>Stage Status</th>
                                     {/* <th>Timer / Remaining Time</th> */}
                                     <th>Reference Amount</th>
@@ -11271,7 +11271,7 @@ export default function Plan() {
                                           </span>
                                         </td>
 
-                                        <td className="hp-duration-cell">
+                                        {/* <td className="hp-duration-cell">
                                           <CalendarDays
                                             size={12}
                                             style={{
@@ -11284,7 +11284,7 @@ export default function Plan() {
                                           {stage.durationDays === 1
                                             ? "Day"
                                             : "Days"}
-                                        </td>
+                                        </td> */}
 
                                         <td>
                                           <span
