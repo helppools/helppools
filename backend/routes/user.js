@@ -574,6 +574,130 @@ res.json({
   }
 });
 
+
+
+router.get('/all-team/:userId', authMiddleware, async (req, res) => {
+  try {
+    // 1. Security: User sirf apni team dekh sakta hai
+    const currentUserId = Number(req.params.userId);
+
+    if (
+      !Number.isSafeInteger(currentUserId) ||
+      currentUserId !== Number(req.user.userId)
+    ) {
+      return res.status(403).json({
+        message: 'Access denied'
+      });
+    }
+
+    // 2. Saare required users load karo
+    const allUsers = await User.find(
+      {},
+      '_id userId sponsorId name country topUpAmount createdAt role'
+    ).lean();
+
+    // 3. Sponsor map: String conversion se type mismatch solve
+    const directMap = new Map();
+
+    for (const user of allUsers) {
+      if (
+        user.sponsorId !== null &&
+        user.sponsorId !== undefined &&
+        user.sponsorId !== ''
+      ) {
+        const sponsorKey = String(user.sponsorId).trim();
+
+        if (!directMap.has(sponsorKey)) {
+          directMap.set(sponsorKey, []);
+        }
+
+        directMap.get(sponsorKey).push(user);
+      }
+    }
+
+    // 4. Complete team traversal
+    const allTeam = [];
+    const queue = [];
+    const visited = new Set();
+
+    let directCount = 0;
+    const levelWiseCount = {};
+
+    const directs =
+      directMap.get(String(currentUserId)) || [];
+
+    for (const direct of directs) {
+      queue.push({
+        user: direct,
+        level: 1
+      });
+    }
+
+    let queueIndex = 0;
+
+    while (queueIndex < queue.length) {
+      const { user, level } = queue[queueIndex++];
+
+      const userKey = String(user.userId);
+
+      // Duplicate ya circular referral se protection
+      if (visited.has(userKey)) {
+        continue;
+      }
+
+      visited.add(userKey);
+
+      // 5. Team statistics
+      if (level === 1) {
+        directCount++;
+      }
+
+      levelWiseCount[level] =
+        (levelWiseCount[level] || 0) + 1;
+
+      // 6. Member response
+      allTeam.push({
+        srNo: allTeam.length + 1,
+        _id: user._id,
+        userId: user.userId,
+        name: user.name,
+        country: user.country,
+        topUpAmount: user.topUpAmount || 0,
+        createdAt: user.createdAt,
+        level: level
+      });
+
+      // 7. IMPORTANT: No leader breakaway.
+      // Har member ke neeche ke saare members traverse honge.
+      const children =
+        directMap.get(userKey) || [];
+
+      for (const child of children) {
+        queue.push({
+          user: child,
+          level: level + 1
+        });
+      }
+    }
+
+    // 8. Same response structure
+    return res.json({
+      team: allTeam,
+      totalTeamCount: allTeam.length,
+      directCount: directCount,
+      indirectCount: allTeam.length - directCount,
+      levelWiseCount: levelWiseCount
+    });
+
+  } catch (err) {
+    console.error('Error fetching complete team:', err);
+
+    return res.status(500).json({
+      message: 'Server error'
+    });
+  }
+});
+
 // ---------------------------
 // 2. All Team (No Change Needed, but kept for reference)
 // ---------------------------
@@ -670,93 +794,93 @@ res.json({
 //   }
 // });
 
-router.get('/all-team/:userId', authMiddleware, async (req, res) => {
-    try {
-      if (Number(req.params.userId) !== Number(req.user.userId)) {
-  return res.status(403).json({ message: 'Access denied' });
-}
-    const currentUserId = Number(req.params.userId);
+// router.get('/all-team/:userId', authMiddleware, async (req, res) => {
+//     try {
+//       if (Number(req.params.userId) !== Number(req.user.userId)) {
+//   return res.status(403).json({ message: 'Access denied' });
+// }
+//     const currentUserId = Number(req.params.userId);
 
-    // 🔥 1. Ek hi baar me saare users RAM mein load karenge (Superfast + Role Checking)
-    const allUsers = await User.find({}, '_id userId sponsorId name country topUpAmount createdAt role').lean();
+//     // 🔥 1. Ek hi baar me saare users RAM mein load karenge (Superfast + Role Checking)
+//     const allUsers = await User.find({}, '_id userId sponsorId name country topUpAmount createdAt role').lean();
 
-    // 🔥 CURRENT USER KA ROLE CHECK KARO (Check if he is a Super Leader)
-    const currentUserData = allUsers.find(u => u.userId === currentUserId);
-    const isSuperLeader = currentUserData && currentUserData.role === 'superleader';
+//     // 🔥 CURRENT USER KA ROLE CHECK KARO (Check if he is a Super Leader)
+//     const currentUserData = allUsers.find(u => u.userId === currentUserId);
+//     const isSuperLeader = currentUserData && currentUserData.role === 'superleader';
 
-    // 2. RAM mein Network Tree banayenge
-    const directMap = new Map();
-    for (let u of allUsers) {
-        if (u.sponsorId) {
-            if (!directMap.has(u.sponsorId)) {
-                directMap.set(u.sponsorId, []);
-            }
-            directMap.get(u.sponsorId).push(u);
-        }
-    }
+//     // 2. RAM mein Network Tree banayenge
+//     const directMap = new Map();
+//     for (let u of allUsers) {
+//         if (u.sponsorId) {
+//             if (!directMap.has(u.sponsorId)) {
+//                 directMap.set(u.sponsorId, []);
+//             }
+//             directMap.get(u.sponsorId).push(u);
+//         }
+//     }
 
-    // 3. Traversal with SECRET BREAKAWAY
-    let allTeam = [];
-    let queue = [];
+//     // 3. Traversal with SECRET BREAKAWAY
+//     let allTeam = [];
+//     let queue = [];
     
-    // Stats maintain karne ke variables (Aapke purane code ke hisaab se)
-    let directCount = 0;
-    const levelWiseCount = {};
+//     // Stats maintain karne ke variables (Aapke purane code ke hisaab se)
+//     let directCount = 0;
+//     const levelWiseCount = {};
 
-    // Pehle apne direct (Level 1) walo ko queue mein daalo
-    const directs = directMap.get(currentUserId) || [];
-    for (let d of directs) {
-        queue.push({ user: d, level: 1 });
-    }
+//     // Pehle apne direct (Level 1) walo ko queue mein daalo
+//     const directs = directMap.get(currentUserId) || [];
+//     for (let d of directs) {
+//         queue.push({ user: d, level: 1 });
+//     }
 
-    // Ab poora network traverse karenge
-    while (queue.length > 0) {
-        const { user, level } = queue.shift();
+//     // Ab poora network traverse karenge
+//     while (queue.length > 0) {
+//         const { user, level } = queue.shift();
 
-        // Stats update karo
-        if (level === 1) directCount++;
-        levelWiseCount[level] = (levelWiseCount[level] || 0) + 1;
+//         // Stats update karo
+//         if (level === 1) directCount++;
+//         levelWiseCount[level] = (levelWiseCount[level] || 0) + 1;
 
-        // User ko All Team list mein add kar do
-        allTeam.push({
-            srNo: allTeam.length + 1,
-            _id: user._id,
-            userId: user.userId,
-            name: user.name,
-            country: user.country,
-            topUpAmount: user.topUpAmount || 0,
-            createdAt: user.createdAt,
-            level: level
-            // Role ko hum response mein bhej hi nahi rahe, taaki frontend par kisi ko doubt na ho!
-        });
+//         // User ko All Team list mein add kar do
+//         allTeam.push({
+//             srNo: allTeam.length + 1,
+//             _id: user._id,
+//             userId: user.userId,
+//             name: user.name,
+//             country: user.country,
+//             topUpAmount: user.topUpAmount || 0,
+//             createdAt: user.createdAt,
+//             level: level
+//             // Role ko hum response mein bhej hi nahi rahe, taaki frontend par kisi ko doubt na ho!
+//         });
 
-        // 🛑 SECRET BREAKAWAY WALL (WITH SUPER LEADER BYPASS) 🛑
-        // Agar ye current banda 'leader' hai, aur jo dekh raha hai wo 'superleader' NAHI hai, toh aage mat badho.
-        if (user.role === 'leader' && !isSuperLeader) {
-            continue; 
-        }
+//         // 🛑 SECRET BREAKAWAY WALL (WITH SUPER LEADER BYPASS) 🛑
+//         // Agar ye current banda 'leader' hai, aur jo dekh raha hai wo 'superleader' NAHI hai, toh aage mat badho.
+//         if (user.role === 'leader' && !isSuperLeader) {
+//             continue; 
+//         }
 
-        // Agar leader nahi hai (ya phir dekhne wala superleader hai), toh uske direct logo ko queue mein dalo
-        const children = directMap.get(user.userId) || [];
-        for (let child of children) {
-            queue.push({ user: child, level: level + 1 });
-        }
-    }
+//         // Agar leader nahi hai (ya phir dekhne wala superleader hai), toh uske direct logo ko queue mein dalo
+//         const children = directMap.get(user.userId) || [];
+//         for (let child of children) {
+//             queue.push({ user: child, level: level + 1 });
+//         }
+//     }
 
-    // 4. Response exactly aapke purane format me bhej rahe hain
-    res.json({
-      team: allTeam,
-      totalTeamCount: allTeam.length,
-      directCount: directCount,
-      indirectCount: allTeam.length - directCount,
-      levelWiseCount: levelWiseCount
-    });
+//     // 4. Response exactly aapke purane format me bhej rahe hain
+//     res.json({
+//       team: allTeam,
+//       totalTeamCount: allTeam.length,
+//       directCount: directCount,
+//       indirectCount: allTeam.length - directCount,
+//       levelWiseCount: levelWiseCount
+//     });
 
-  } catch (err) {
-    console.error('Error fetching team:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+//   } catch (err) {
+//     console.error('Error fetching team:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
 
 
 
@@ -764,6 +888,10 @@ router.get('/all-team/:userId', authMiddleware, async (req, res) => {
 // ---------------------------
 // Wallet History
 // router.get('/wallet-history/:userId', async (req, res) => {
+ 
+ 
+ 
+ 
   router.get('/wallet-history/:userId', authMiddleware, async (req, res) => {
   try {
     if (Number(req.params.userId) !== Number(req.user.userId)) {
